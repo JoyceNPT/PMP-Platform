@@ -1,0 +1,20 @@
+{
+  "common": {
+    "dashboard": "Dashboard",
+    "gpa": "GPA Calculator",
+    "finance": "Finance",
+    "roadmap": "Career Roadmap",
+    "chat": "AI Chat",
+    "settings": "Settings",
+    "logout": "Logout",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "auth": {
+    "welcome": "Welcome back",
+    "email": "Email",
+    "password": "Password",
+    "login": "Sign in"
+  }
+}

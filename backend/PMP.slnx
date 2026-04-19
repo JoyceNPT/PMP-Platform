@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PMP.API/PMP.API.csproj" />
+    <Project Path="src/PMP.Application/PMP.Application.csproj" />
+    <Project Path="src/PMP.Domain/PMP.Domain.csproj" />
+    <Project Path="src/PMP.Infrastructure/PMP.Infrastructure.csproj" />
+    <Project Path="src/PMP.Shared/PMP.Shared.csproj" />
+  </Folder>
+</Solution>

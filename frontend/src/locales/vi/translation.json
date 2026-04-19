@@ -1,0 +1,20 @@
+{
+  "common": {
+    "dashboard": "Bảng điều khiển",
+    "gpa": "Quản lý học tập",
+    "finance": "Quản lý tài chính",
+    "roadmap": "Định hướng nghề nghiệp",
+    "chat": "Trợ lý AI",
+    "settings": "Cài đặt",
+    "logout": "Đăng xuất",
+    "light": "Sáng",
+    "dark": "Tối",
+    "system": "Hệ thống"
+  },
+  "auth": {
+    "welcome": "Chào mừng trở lại",
+    "email": "Email",
+    "password": "Mật khẩu",
+    "login": "Đăng nhập"
+  }
+}
