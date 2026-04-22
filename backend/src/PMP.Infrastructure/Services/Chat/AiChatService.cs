@@ -70,13 +70,14 @@ public class AiChatService : IAiChatService
             var apiKey = _configuration["ExternalServices:Gemini:ApiKey"];
             if (string.IsNullOrEmpty(apiKey)) return new ApiResponse<string>("Lỗi cấu hình AI.");
             
-            _logger.LogInformation("Using API Key starting with: {KeyPrefix}", apiKey[..5]);
+            var model = _configuration["ExternalServices:Gemini:Model"] ?? "models/gemini-1.5-flash";
+            if (!model.StartsWith("models/")) model = "models/" + model;
 
             // Using exactly the same URL structure as the reference project
-            var apiUrl = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}";
+            var apiUrl = $"https://generativelanguage.googleapis.com/v1beta/{model}:generateContent?key={apiKey}";
 
             var client = _httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromSeconds(30);
+            client.Timeout = TimeSpan.FromSeconds(120);
 
             var requestBody = new
             {

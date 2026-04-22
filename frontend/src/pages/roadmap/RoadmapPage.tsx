@@ -36,9 +36,9 @@ import { ConfirmModal } from '@/components/shared/ConfirmModal';
 // ─── Custom Node Component ───────────────────────────────────────────────────
 const RoadmapNodeComponent = ({ data }: { data: any }) => {
   const statusColors = [
-    'border-muted bg-muted/20 text-muted-foreground',
-    'border-blue-500 bg-blue-500/10 text-blue-600',
-    'border-emerald-500 bg-emerald-500/10 text-emerald-600'
+    'border-muted bg-card text-muted-foreground',
+    'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-600',
+    'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-600'
   ];
   
   const StatusIcon = [Circle, Clock, CheckCircle2][data.status];
@@ -46,32 +46,28 @@ const RoadmapNodeComponent = ({ data }: { data: any }) => {
   return (
     <div 
       onClick={() => data.onClick(data.rawNode)}
-      className={`px-4 py-3 rounded-xl border-2 shadow-sm min-w-[200px] bg-card cursor-pointer hover:scale-105 transition-all duration-300 ${statusColors[data.status]}`}
+      className={`px-4 py-4 rounded-2xl border-2 shadow-xl w-[240px] h-[120px] bg-card cursor-pointer hover:scale-[1.02] active:scale-95 transition-all duration-300 flex flex-col justify-between ${statusColors[data.status]}`}
     >
-      <div className="flex items-center gap-2 mb-1">
-        <StatusIcon className="h-4 w-4 shrink-0" />
-        <span className="text-[10px] font-bold uppercase tracking-wider">{data.category || 'Skill'}</span>
-      </div>
-      <h4 className="font-bold text-sm leading-tight text-foreground">{data.label}</h4>
-      {data.description && <p className="text-[10px] mt-1 line-clamp-2 text-muted-foreground">{data.description}</p>}
-      
-      {data.certificateUrl && (
-        <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-emerald-600">
-          <Award className="h-3 w-3" /> Chứng chỉ đã nộp
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <div className={`p-1 rounded-md ${data.status === 2 ? 'bg-emerald-500/20' : 'bg-muted'}`}>
+            <StatusIcon className="h-3 w-3 shrink-0" />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-[0.15em] opacity-60">{data.category || 'Skill'}</span>
         </div>
-      )}
-
-      <div className="mt-3 flex gap-1">
-        {[0, 1, 2].map(s => (
-          <button
-            key={s}
-            onClick={(e) => {
-              e.stopPropagation();
-              data.onStatusChange(data.id, s);
-            }}
-            className={`h-1.5 flex-1 rounded-full transition-colors ${data.status === s ? 'bg-current opacity-100' : 'bg-muted opacity-30 hover:opacity-50'}`}
-          />
-        ))}
+        <h4 className="font-bold text-sm leading-tight text-foreground line-clamp-2">{data.label}</h4>
+      </div>
+      
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+        <span className="text-[9px] font-bold opacity-40 uppercase">Bấm để xem chi tiết</span>
+        <div className="flex gap-0.5 w-16">
+          {[0, 1, 2].map(s => (
+            <div
+              key={s}
+              className={`h-1 flex-1 rounded-full transition-all duration-500 ${data.status >= s ? (data.status === 2 ? 'bg-emerald-500' : 'bg-blue-500') : 'bg-muted'}`}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -33,10 +33,11 @@ public class GeminiService : IAiService
                 return default;
             }
 
-            _logger.LogInformation("Using API Key starting with: {KeyPrefix}", apiKey[..5]);
+            var model = _configuration["ExternalServices:Gemini:Model"] ?? "models/gemini-1.5-flash";
+            if (!model.StartsWith("models/")) model = "models/" + model;
 
             // Using exactly the same URL structure as the reference project
-            var apiUrl = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}";
+            var apiUrl = $"https://generativelanguage.googleapis.com/v1beta/{model}:generateContent?key={apiKey}";
 
             var fullPrompt = string.IsNullOrEmpty(systemPrompt) 
                 ? prompt 
@@ -51,7 +52,7 @@ public class GeminiService : IAiService
             };
 
             var client = _httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromSeconds(45);
+            client.Timeout = TimeSpan.FromSeconds(120);
 
             var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
             

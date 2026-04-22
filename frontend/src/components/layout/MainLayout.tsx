@@ -8,9 +8,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       <Sidebar />
 
       {/* Main content area pushed right of sidebar */}
-      <div className="flex flex-col flex-1 md:ml-64 lg:ml-72 min-h-screen">
+      <div className="flex flex-col flex-1 md:ml-72 min-h-screen">
         <Navbar />
-        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8">
+        <main className="flex-1 overflow-y-auto px-6 py-8 md:px-12">
           {children}
         </main>
       </div>

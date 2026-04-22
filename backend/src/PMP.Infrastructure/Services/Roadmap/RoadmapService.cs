@@ -155,7 +155,7 @@ public class RoadmapService : IRoadmapService
                   }}
                 ]";
 
-            var systemPrompt = "You are a professional Career Coach and Technical Expert. You provide highly accurate and practical career roadmaps. Return raw JSON array only.";
+            var systemPrompt = "You are a professional Career Coach and Technical Expert. You provide highly accurate, practical, and CONCISE career roadmaps. Return raw JSON array only.";
 
             var mockNodes = await _aiService.GetStructuredResponseAsync<List<RoadmapNodeTemplate>>(prompt, systemPrompt);
 
