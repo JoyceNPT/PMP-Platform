@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { chatService, chatHub, type Conversation, type Message } from '@/services/chat/chatService';
 import { useAuthStore } from '@/store/authStore';
 
@@ -14,17 +14,24 @@ export function useChat() {
     chatService.getConversations().then(setConversations).finally(() => setLoading(false));
   }, []);
 
+  const activeConvIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeConvIdRef.current = activeConv?.id || null;
+  }, [activeConv?.id]);
+
   // SignalR connection
   useEffect(() => {
     if (token) {
       chatHub.start(token, (newMsg) => {
-        setMessages(prev => {
-          // Avoid duplicates (since we might get it from API response + SignalR)
-          if (prev.find(m => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
-        });
+        // Use ref to check current active conversation to avoid stale closure
+        if (newMsg.conversationId === activeConvIdRef.current) {
+          setMessages(prev => {
+            if (prev.find(m => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
+        }
         
-        // Update conversation list preview
+        // Always update conversation list preview regardless of active chat
         setConversations(prev => prev.map(c => 
           c.id === newMsg.conversationId 
             ? { ...c, lastMessageAt: newMsg.createdAt, lastMessage: newMsg } 
@@ -60,6 +67,12 @@ export function useChat() {
     return conv;
   };
 
+  const deleteConversation = async (id: string) => {
+    await chatService.deleteConversation(id);
+    setConversations(prev => prev.filter(c => c.id !== id));
+    if (activeConv?.id === id) setActiveConv(null);
+  };
+
   return {
     conversations,
     activeConv,
@@ -67,6 +80,7 @@ export function useChat() {
     messages,
     loading,
     sendMessage,
-    createConversation
+    createConversation,
+    deleteConversation
   };
 }

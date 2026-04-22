@@ -5,6 +5,7 @@ interface User {
   id: string;
   email: string;
   fullName: string;
+  avatarUrl?: string;
 }
 
 interface AuthState {
@@ -31,8 +32,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'auth-storage', // name of item in the storage (must be unique)
-      partialize: (state) => ({ user: state.user }), // only persist user
+      name: 'auth-storage',
     }
   )
 );

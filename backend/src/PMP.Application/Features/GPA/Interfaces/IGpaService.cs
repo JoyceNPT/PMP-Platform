@@ -12,6 +12,7 @@ public interface IGpaService
     // Academic Years
     Task<ApiResponse<List<AcademicYearDto>>> GetAcademicYearsAsync(Guid userId);
     Task<ApiResponse<AcademicYearDto>> CreateAcademicYearAsync(Guid userId, CreateAcademicYearRequest request);
+    Task<ApiResponse<AcademicYearDto>> UpdateAcademicYearAsync(Guid userId, Guid yearId, UpdateAcademicYearRequest request);
     Task<ApiResponse<bool>> DeleteAcademicYearAsync(Guid userId, Guid yearId);
 
     // Semesters

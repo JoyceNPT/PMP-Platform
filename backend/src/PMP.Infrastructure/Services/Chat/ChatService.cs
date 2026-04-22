@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
+using PMP.Infrastructure.Services.System;
 using PMP.Infrastructure.Hubs;
 using PMP.Application.Features.Chat.DTOs;
 using PMP.Application.Features.Chat.Interfaces;
@@ -14,11 +16,13 @@ public class ChatService : IChatService
 {
     private readonly ApplicationDbContext _db;
     private readonly IHubContext<ChatHub> _hubContext;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public ChatService(ApplicationDbContext db, IHubContext<ChatHub> hubContext)
+    public ChatService(ApplicationDbContext db, IHubContext<ChatHub> hubContext, IServiceScopeFactory scopeFactory)
     {
         _db = db;
         _hubContext = hubContext;
+        _scopeFactory = scopeFactory;
     }
 
     // ─── Conversations ───────────────────────────────────────────────────────
@@ -145,22 +149,24 @@ public class ChatService : IChatService
 
     private async Task HandleAiResponse(Guid userId, Guid convId, string userMessage)
     {
-        // Simulate delay
-        await Task.Delay(1000);
+        using var scope = _scopeFactory.CreateScope();
+        var aiChatService = scope.ServiceProvider.GetRequiredService<IAiChatService>();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var aiResponse = await aiChatService.GetAiResponseAsync(userId, userMessage);
+        var content = aiResponse.Succeeded ? aiResponse.Data! : (aiResponse.Message ?? "Xin lỗi, tôi gặp sự cố khi kết nối với não bộ AI.");
 
         var aiMsg = new Message
         {
             ConversationId = convId,
             Role = MessageRole.Assistant,
-            Content = $"Chào bạn! Tôi là trợ lý PMP. Bạn vừa nói: \"{userMessage}\". Tôi có thể giúp gì thêm cho bạn?",
+            Content = content,
             ContentType = MessageContentType.Text,
             CreatedAt = DateTime.UtcNow
         };
 
-        using var scope = _db.Database.BeginTransaction();
-        _db.Messages.Add(aiMsg);
-        await _db.SaveChangesAsync();
-        await scope.CommitAsync();
+        db.Messages.Add(aiMsg);
+        await db.SaveChangesAsync();
 
         var dto = MapMessage(aiMsg);
         await _hubContext.Clients.Group(convId.ToString()).SendAsync("ReceiveMessage", dto);

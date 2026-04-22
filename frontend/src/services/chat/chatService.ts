@@ -51,7 +51,11 @@ let hubConnection: signalR.HubConnection | null = null;
 
 export const chatHub = {
   start: async (token: string, onMessageReceived: (msg: Message) => void) => {
-    if (hubConnection) return;
+    if (hubConnection) {
+      hubConnection.off('ReceiveMessage');
+      hubConnection.on('ReceiveMessage', onMessageReceived);
+      return;
+    }
 
     hubConnection = new signalR.HubConnectionBuilder()
       .withUrl('/hubs/chat', {

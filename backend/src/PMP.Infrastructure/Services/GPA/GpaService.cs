@@ -16,8 +16,9 @@ public class GpaService : IGpaService
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
-    private static string ToGradeLabel(decimal score) => score switch
+    private static string ToGradeLabel(decimal? score) => score switch
     {
+        null    => "-",
         >= 9.0m => "A+",
         >= 8.5m => "A",
         >= 8.0m => "B+",
@@ -60,9 +61,13 @@ public class GpaService : IGpaService
 
     private static SemesterDto MapSemester(Semester s)
     {
-        var courses  = s.Courses?.ToList() ?? [];
+        var courses       = s.Courses?.ToList() ?? [];
+        var gradedCourses = courses.Where(c => c.Score != null).ToList();
+        
         var totalCr  = courses.Sum(c => c.Credits);
-        var gpa      = totalCr > 0 ? courses.Sum(c => c.Score * c.Credits) / totalCr : 0;
+        var gradedCr = gradedCourses.Sum(c => c.Credits);
+        var gpa      = gradedCr > 0 ? gradedCourses.Sum(c => c.Score!.Value * c.Credits) / gradedCr : 0;
+
         return new SemesterDto
         {
             Id            = s.Id,
@@ -80,7 +85,7 @@ public class GpaService : IGpaService
         Id        = y.Id,
         YearName  = y.YearName,
         YearOrder = y.YearOrder,
-        Semesters = y.Semesters?.Select(MapSemester).ToList() ?? []
+        Semesters = y.Semesters?.OrderBy(s => s.SemesterType).Select(MapSemester).ToList() ?? []
     };
 
     // ─── Config ──────────────────────────────────────────────────────────────
@@ -131,7 +136,8 @@ public class GpaService : IGpaService
         var years = await _db.AcademicYears
             .Where(y => y.UserId == userId)
             .Include(y => y.Semesters).ThenInclude(s => s.Courses)
-            .OrderBy(y => y.YearOrder)
+            .OrderByDescending(y => y.YearOrder)
+            .ThenByDescending(y => y.YearName)
             .ToListAsync();
         return new ApiResponse<List<AcademicYearDto>>(years.Select(MapYear).ToList());
     }
@@ -154,13 +160,38 @@ public class GpaService : IGpaService
         return new ApiResponse<AcademicYearDto>(MapYear(year), "Tạo năm học thành công.");
     }
 
-    public async Task<ApiResponse<bool>> DeleteAcademicYearAsync(Guid userId, Guid yearId)
+    public async Task<ApiResponse<AcademicYearDto>> UpdateAcademicYearAsync(Guid userId, Guid yearId, UpdateAcademicYearRequest req)
     {
         var year = await _db.AcademicYears.FirstOrDefaultAsync(y => y.Id == yearId && y.UserId == userId);
-        if (year is null) return new ApiResponse<bool>("Không tìm thấy năm học.");
-        _db.AcademicYears.Remove(year);
+        if (year is null) return new ApiResponse<AcademicYearDto>("Không tìm thấy năm học.");
+
+        year.YearName = req.YearName;
+        year.YearOrder = req.YearOrder;
+        
         await _db.SaveChangesAsync();
-        return new ApiResponse<bool>(true, "Đã xoá năm học.");
+        return new ApiResponse<AcademicYearDto>(MapYear(year), "Cập nhật năm học thành công.");
+    }
+
+    public async Task<ApiResponse<bool>> DeleteAcademicYearAsync(Guid userId, Guid yearId)
+    {
+        var year = await _db.AcademicYears
+            .Include(y => y.Semesters).ThenInclude(s => s.Courses)
+            .FirstOrDefaultAsync(y => y.Id == yearId && y.UserId == userId);
+            
+        if (year is null) return new ApiResponse<bool>("Không tìm thấy năm học.");
+
+        year.IsDeleted = true;
+        foreach (var sem in year.Semesters)
+        {
+            sem.IsDeleted = true;
+            foreach (var course in sem.Courses)
+            {
+                course.IsDeleted = true;
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return new ApiResponse<bool>(true, "Đã xoá năm học và toàn bộ dữ liệu liên quan.");
     }
 
     // ─── Semesters ───────────────────────────────────────────────────────────
@@ -172,7 +203,7 @@ public class GpaService : IGpaService
             .FirstOrDefaultAsync(y => y.Id == req.AcademicYearId && y.UserId == userId);
         if (year is null) return new ApiResponse<SemesterDto>("Không tìm thấy năm học.");
 
-        if (year.Semesters.Any(s => s.SemesterType == (SemesterType)req.SemesterType))
+        if (year.Semesters.Any(s => !s.IsDeleted && s.SemesterType == (SemesterType)req.SemesterType))
             return new ApiResponse<SemesterDto>("Học kỳ này đã tồn tại.");
 
         var sem = new Semester { AcademicYearId = req.AcademicYearId, SemesterType = (SemesterType)req.SemesterType };
@@ -185,11 +216,19 @@ public class GpaService : IGpaService
     {
         var sem = await _db.Semesters
             .Include(s => s.AcademicYear)
+            .Include(s => s.Courses)
             .FirstOrDefaultAsync(s => s.Id == semId && s.AcademicYear.UserId == userId);
+            
         if (sem is null) return new ApiResponse<bool>("Không tìm thấy học kỳ.");
-        _db.Semesters.Remove(sem);
+
+        sem.IsDeleted = true;
+        foreach (var course in sem.Courses)
+        {
+            course.IsDeleted = true;
+        }
+
         await _db.SaveChangesAsync();
-        return new ApiResponse<bool>(true, "Đã xoá học kỳ.");
+        return new ApiResponse<bool>(true, "Đã xoá học kỳ và toàn bộ môn học.");
     }
 
     // ─── Courses ─────────────────────────────────────────────────────────────
@@ -244,19 +283,24 @@ public class GpaService : IGpaService
         var years = await _db.AcademicYears
             .Where(y => y.UserId == userId)
             .Include(y => y.Semesters).ThenInclude(s => s.Courses)
-            .OrderBy(y => y.YearOrder)
+            .OrderByDescending(y => y.YearOrder)
+            .ThenByDescending(y => y.YearName)
             .ToListAsync();
 
         var allCourses = years.SelectMany(y => y.Semesters).SelectMany(s => s.Courses).ToList();
+        var gradedCourses = allCourses.Where(c => c.Score != null).ToList();
+        
         var completedCredits = allCourses.Sum(c => c.Credits);
-        var currentGpa = completedCredits > 0
-            ? allCourses.Sum(c => c.Score * c.Credits) / completedCredits
+        var gradedCredits    = gradedCourses.Sum(c => c.Credits);
+        
+        var currentGpa = gradedCredits > 0
+            ? gradedCourses.Sum(c => c.Score!.Value * c.Credits) / gradedCredits
             : 0m;
 
         var totalCredits = cfg?.TotalCredits ?? 0;
-        var remainingCredits = totalCredits - completedCredits;
+        var remainingCredits = totalCredits - gradedCredits; // Cần đạt mục tiêu dựa trên tín chỉ còn lại
         var neededScore = remainingCredits > 0 && cfg is not null
-            ? (cfg.TargetGpa * totalCredits - currentGpa * completedCredits) / remainingCredits
+            ? (cfg.TargetGpa * totalCredits - currentGpa * gradedCredits) / remainingCredits
             : 0m;
 
         return new ApiResponse<GpaSummaryDto>(new GpaSummaryDto

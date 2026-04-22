@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -9,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useFinanceSummary, useSavingGoals, useAiPrediction, useCategories, useTransactions } from '@/features/finance/components/useFinance';
 import { financeService } from '@/services/finance/financeService';
+import { ConfirmModal } from '@/components/shared/ConfirmModal';
 
 // ─── Format helpers ───────────────────────────────────────────────────────────
 const fmtVnd = (v: number) =>
@@ -37,6 +39,12 @@ export function FinancePage() {
   // Reset and Category modals
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showDelGoal, setShowDelGoal] = useState(false);
+  const [delGoalId, setDelGoalId]     = useState<string | null>(null);
+  const [showDelCat, setShowDelCat]   = useState(false);
+  const [delCatId, setDelCatId]       = useState<string | null>(null);
+  const [showDelTx, setShowDelTx]     = useState(false);
+  const [delTxId, setDelTxId]         = useState<string | null>(null);
 
   // Quick-add transaction state
   const [showAdd, setShowAdd]       = useState(false);
@@ -69,7 +77,7 @@ export function FinancePage() {
   const handleAddTx = async () => {
     if (!txAmount || !txCatId) return;
     if (new Date(txDate) > new Date()) {
-      alert('Không thể nhập giao dịch trong tương lai. Vui lòng chọn ngày hôm nay hoặc quá khứ.');
+      toast.error('Không thể nhập giao dịch trong tương lai. Vui lòng chọn ngày hôm nay hoặc quá khứ.');
       return;
     }
     setTxSubmitting(true);
@@ -121,8 +129,8 @@ export function FinancePage() {
   };
 
   const handleDeleteGoal = async (id: string) => {
-    if (!confirm('Xoá mục tiêu tiết kiệm này?')) return;
     await financeService.deleteSavingGoal(id);
+    toast.success('Đã xoá mục tiêu tiết kiệm');
     refreshGoals();
   };
 
@@ -137,7 +145,7 @@ export function FinancePage() {
       refreshSum();
       refreshGoals();
       refreshCats();
-      alert('Đã xoá toàn bộ dữ liệu tài chính thành công!');
+      toast.success('Đã xoá toàn bộ dữ liệu tài chính thành công!');
     } finally {
       setTxSubmitting(false);
     }
@@ -148,7 +156,8 @@ export function FinancePage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
+    <div className="space-y-6 relative">
+      <div className="animate-fade-in-up space-y-6">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
@@ -291,7 +300,7 @@ export function FinancePage() {
               <GoalCard 
                 key={goal.id} 
                 goal={goal} 
-                onDelete={handleDeleteGoal} 
+                onDelete={(id) => { setDelGoalId(id); setShowDelGoal(true); }} 
                 onRefresh={refreshGoals} 
                 onEdit={(g) => {
                   setEditingGoalId(g.id);
@@ -331,27 +340,6 @@ export function FinancePage() {
         ) : null}
       </div>
 
-      {/* ── Reset Data Confirm Modal ── */}
-      {showResetConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-sm rounded-2xl border bg-card shadow-xl p-6 space-y-4 text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 text-red-600 mb-4">
-              <Trash2 className="h-6 w-6" />
-            </div>
-            <h3 className="font-bold text-lg text-red-600">Xoá toàn bộ dữ liệu?</h3>
-            <p className="text-sm text-muted-foreground">
-              Hành động này sẽ xoá **toàn bộ** danh mục, giao dịch, mục tiêu tiết kiệm và dữ liệu dự báo AI của bạn. Dữ liệu không thể khôi phục.
-            </p>
-            <div className="flex gap-3 justify-center pt-4">
-              <button onClick={() => setShowResetConfirm(false)} className="h-10 px-4 rounded-xl border text-sm hover:bg-muted transition">Huỷ</button>
-              <button onClick={handleResetData} disabled={txSubmitting}
-                className="h-10 px-5 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:bg-destructive/90 transition flex items-center gap-2">
-                {txSubmitting && <Loader2 className="h-4 w-4 animate-spin" />} Xác nhận xoá
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Add Transaction Modal ── */}
       {showAdd && (
@@ -443,6 +431,9 @@ export function FinancePage() {
           </div>
         </div>
       )}
+      </div>
+
+      {/* Categories Modal (Outside the animated div) */}
       {showCategoryModal && (
         <CategoryModal 
           onClose={() => setShowCategoryModal(false)} 
@@ -450,6 +441,46 @@ export function FinancePage() {
           onRefresh={refreshCats} 
         />
       )}
+
+      {/* Confirm Modals (Outside the animated div) */}
+      <ConfirmModal
+        isOpen={showResetConfirm}
+        onClose={() => setShowResetConfirm(false)}
+        onConfirm={handleResetData}
+        title="Xoá toàn bộ dữ liệu?"
+        description="Toàn bộ giao dịch, mục tiêu và danh mục sẽ bị xoá vĩnh viễn. Hành động này không thể hoàn tác."
+      />
+
+      <ConfirmModal
+        isOpen={showDelGoal}
+        onClose={() => setShowDelGoal(false)}
+        onConfirm={() => delGoalId && handleDeleteGoal(delGoalId)}
+        title="Xoá mục tiêu?"
+        description="Bạn có chắc chắn muốn xoá mục tiêu tiết kiệm này?"
+      />
+
+      <ConfirmModal
+        isOpen={showDelCat}
+        onClose={() => setShowDelCat(false)}
+        onConfirm={() => delCatId && handleDeleteCategory(delCatId)}
+        title="Xoá danh mục?"
+        description="Cảnh báo: Tất cả giao dịch liên quan đến danh mục này cũng sẽ bị xoá!"
+      />
+
+      <ConfirmModal
+        isOpen={showDelTx}
+        onClose={() => setShowDelTx(false)}
+        onConfirm={async () => {
+          if (delTxId) {
+            await financeService.deleteTransaction(delTxId);
+            toast.success('Đã xoá giao dịch');
+            refreshSum();
+            window.location.reload(); 
+          }
+        }}
+        title="Xoá giao dịch?"
+        description="Bạn có chắc muốn xoá giao dịch này?"
+      />
     </div>
   );
 }
@@ -475,8 +506,8 @@ function CategoryModal({ onClose, categories, onRefresh }: { onClose: () => void
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Xoá danh mục này? Các giao dịch liên quan sẽ BỊ XOÁ THEO!')) return;
     await financeService.deleteCategory(id);
+    toast.success('Đã xoá danh mục');
     onRefresh();
   };
 
@@ -484,7 +515,7 @@ function CategoryModal({ onClose, categories, onRefresh }: { onClose: () => void
   const expenses = categories.filter(c => c.type === 1);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-lg rounded-2xl border bg-card shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
         <div className="p-5 border-b flex justify-between items-center">
           <h3 className="font-bold text-lg">Quản lý danh mục</h3>
@@ -663,12 +694,7 @@ function TransactionList({ month, year, onRefresh: _onRefresh, onEdit }: { month
               <button onClick={() => onEdit(tx)} className="text-muted-foreground hover:text-primary">
                 <Edit className="h-3.5 w-3.5" />
               </button>
-              <button onClick={async () => {
-                if(!confirm('Xoá giao dịch này?')) return;
-                await financeService.deleteTransaction(tx.id);
-                refresh();
-                _onRefresh();
-              }} className="text-muted-foreground hover:text-destructive">
+              <button onClick={() => { setDelTxId(tx.id); setShowDelTx(true); }} className="text-muted-foreground hover:text-destructive">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>

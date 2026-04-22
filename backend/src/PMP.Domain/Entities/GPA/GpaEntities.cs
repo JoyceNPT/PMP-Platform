@@ -62,9 +62,9 @@ public class Course : BaseEntity
 
     /// <summary>
     /// Thang 10, precision(5,2), KHÔNG làm tròn.
-    /// VD: 8.75 lưu chính xác là 8.75
+    /// VD: 8.75 lưu chính xác là 8.75. null nếu chưa có điểm.
     /// </summary>
-    public decimal Score { get; set; }
+    public decimal? Score { get; set; }
 
     // ── Navigation ───────────────────────────────────────────────────────────
     public Semester Semester { get; set; } = null!;

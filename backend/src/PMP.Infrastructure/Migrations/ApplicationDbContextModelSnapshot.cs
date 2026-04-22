@@ -784,8 +784,7 @@ namespace PMP.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("GpaConfigId", "YearOrder")
-                        .IsUnique();
+                    b.HasIndex("GpaConfigId", "YearOrder");
 
                     b.ToTable("AcademicYears", (string)null);
                 });
@@ -815,7 +814,7 @@ namespace PMP.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<decimal>("Score")
+                    b.Property<decimal?>("Score")
                         .HasColumnType("numeric(5,2)");
 
                     b.Property<Guid>("SemesterId")
@@ -898,8 +897,7 @@ namespace PMP.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AcademicYearId", "SemesterType")
-                        .IsUnique();
+                    b.HasIndex("AcademicYearId", "SemesterType");
 
                     b.ToTable("Semesters", (string)null);
                 });

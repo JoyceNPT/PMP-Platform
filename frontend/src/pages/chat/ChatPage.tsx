@@ -2,16 +2,17 @@ import { useState, useRef, useEffect } from 'react';
 import { 
   Send, Plus, Bot, User, 
   Search, MoreVertical, Paperclip, 
-  Loader2, MessageSquare 
+  Loader2, MessageSquare, Trash2 
 } from 'lucide-react';
 import { useChat } from '@/features/chat/components/useChat';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { toast } from 'react-hot-toast';
 
 export function ChatPage() {
   const { 
     conversations, activeConv, setActiveConv, 
-    messages, loading, sendMessage, createConversation 
+    messages, loading, sendMessage, createConversation, deleteConversation 
   } = useChat();
 
   const [input, setInput] = useState('');
@@ -26,13 +27,37 @@ export function ChatPage() {
 
   const handleSend = async () => {
     if (!input.trim()) return;
+    console.log("handleSend triggered", input);
     const text = input;
     setInput('');
-    await sendMessage(text);
+    try {
+      await sendMessage(text);
+    } catch (err) {
+      console.error("handleSend error", err);
+      toast.error("Không thể gửi tin nhắn.");
+    }
   };
 
   const handleNewAiChat = async () => {
-    await createConversation(0); // 0 = AI
+    console.log("handleNewAiChat triggered");
+    try {
+      await createConversation(0); // 0 = AI
+      toast.success("Đã tạo cuộc hội thoại mới.");
+    } catch (err) {
+      console.error("handleNewAiChat error", err);
+      toast.error("Không thể tạo cuộc hội thoại mới.");
+    }
+  };
+
+  const handleDeleteConv = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!confirm("Bạn có chắc chắn muốn xoá cuộc hội thoại này?")) return;
+    try {
+      await deleteConversation(id);
+      toast.success("Đã xoá hội thoại.");
+    } catch (err) {
+      toast.error("Không thể xoá hội thoại.");
+    }
   };
 
   if (loading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -66,7 +91,7 @@ export function ChatPage() {
               <button
                 key={c.id}
                 onClick={() => setActiveConv(c)}
-                className={`w-full p-4 flex gap-3 border-b border-border/40 hover:bg-muted/50 transition-colors text-left ${activeConv?.id === c.id ? 'bg-primary/5 border-l-4 border-l-primary' : ''}`}
+                className={`group w-full p-4 flex gap-3 border-b border-border/40 hover:bg-muted/50 transition-colors text-left ${activeConv?.id === c.id ? 'bg-primary/5 border-l-4 border-l-primary' : ''}`}
               >
                 <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${c.type === 0 ? 'bg-violet-100 text-violet-600' : 'bg-blue-100 text-blue-600'}`}>
                   {c.type === 0 ? <Bot className="h-5 w-5" /> : <User className="h-5 w-5" />}
@@ -74,11 +99,19 @@ export function ChatPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline mb-0.5">
                     <p className="font-bold text-sm truncate">{c.title || (c.type === 0 ? 'AI Assistant' : 'Support Agent')}</p>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-[10px] text-muted-foreground shrink-0">
                       {c.lastMessageAt && format(new Date(c.lastMessageAt), 'HH:mm', { locale: vi })}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">{c.lastMessage?.content || 'Chưa có tin nhắn'}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground truncate flex-1">{c.lastMessage?.content || 'Chưa có tin nhắn'}</p>
+                    <button 
+                      onClick={(e) => handleDeleteConv(e, c.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-destructive transition-all"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
               </button>
             ))
@@ -169,7 +202,11 @@ export function ChatPage() {
               <h3 className="text-xl font-bold">Chọn một cuộc hội thoại</h3>
               <p className="text-sm text-muted-foreground">Bắt đầu trò chuyện với AI Assistant để nhận được những lời khuyên hữu ích về học tập và tài chính.</p>
             </div>
-            <button onClick={handleNewAiChat} className="h-11 px-6 rounded-2xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition flex items-center gap-2">
+            <button 
+              type="button"
+              onClick={handleNewAiChat} 
+              className="h-11 px-6 rounded-2xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition flex items-center gap-2"
+            >
               <Plus className="h-5 w-5" /> Trò chuyện mới
             </button>
           </div>

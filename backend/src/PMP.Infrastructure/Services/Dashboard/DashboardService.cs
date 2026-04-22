@@ -19,11 +19,13 @@ public class DashboardService : IDashboardService
     public async Task<ApiResponse<DashboardOverviewDto>> GetOverviewAsync(Guid userId)
     {
         // 1. GPA Calc
-        var courses = await _db.Courses.Where(c => c.UserId == userId).ToListAsync();
+        var courses = await _db.Courses.Where(c => c.UserId == userId && c.Score != null).ToListAsync();
         decimal currentGpa = 0;
-        if (courses.Any() && courses.Sum(c => c.Credits) > 0)
+        if (courses.Any())
         {
-            currentGpa = courses.Sum(c => c.Score * c.Credits) / courses.Sum(c => c.Credits);
+            var totalCr = courses.Sum(c => c.Credits);
+            if (totalCr > 0)
+                currentGpa = courses.Sum(c => c.Score!.Value * c.Credits) / totalCr;
         }
 
         string ranking = currentGpa switch

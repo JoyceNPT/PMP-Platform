@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'react-hot-toast';
 import {
   ReactFlow,
   Background,
@@ -30,6 +31,7 @@ import {
 } from 'lucide-react';
 import { useCareerProfile, useActiveRoadmap } from '@/features/roadmap/components/useRoadmap';
 import { roadmapService, type RoadmapNode } from '@/services/roadmap/roadmapService';
+import { ConfirmModal } from '@/components/shared/ConfirmModal';
 
 // ─── Custom Node Component ───────────────────────────────────────────────────
 const RoadmapNodeComponent = ({ data }: { data: any }) => {
@@ -89,6 +91,7 @@ export function RoadmapPage() {
   // Modals state
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAddSkillModal, setShowAddSkillModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal]   = useState(false);
   const [selectedNode, setSelectedNode] = useState<RoadmapNode | null>(null);
   const [certUrl, setCertUrl] = useState('');
   const [editNote, setEditNote] = useState('');
@@ -164,16 +167,24 @@ export function RoadmapPage() {
   };
 
   const handleGenerate = async () => {
-    if (!careerPath) return;
+    console.log("handleGenerate triggered", { careerPath, targetLevel });
+    if (!careerPath.trim()) {
+      toast.error("Vui lòng nhập vị trí công việc mơ ước.");
+      return;
+    }
     if (!profile || !profile.major) {
-      alert("Vui lòng cập nhật Hồ sơ năng lực (Chuyên ngành) trước khi tạo lộ trình.");
+      toast.error("Vui lòng cập nhật Hồ sơ năng lực (Chuyên ngành) trước khi tạo lộ trình.");
       setShowProfileModal(true);
       return;
     }
-    setGenerating(true);
+    const loadingToast = toast.loading("AI đang nghiên cứu và tạo lộ trình cho bạn...");
     try {
-      await roadmapService.generateAiRoadmap(careerPath, targetLevel);
-      refreshRoadmap();
+      await roadmapService.generateAiRoadmap(careerPath.trim(), targetLevel);
+      await refreshRoadmap();
+      toast.success("Lộ trình đã sẵn sàng!", { id: loadingToast });
+    } catch (err: any) {
+      console.error("handleGenerate error", err);
+      toast.error(err.response?.data?.message || "Không thể tạo lộ trình. Vui lòng thử lại sau.", { id: loadingToast });
     } finally {
       setGenerating(false);
     }
@@ -181,8 +192,8 @@ export function RoadmapPage() {
 
   const handleDeleteRoadmap = async () => {
     if (!roadmap) return;
-    if (!confirm('Xoá roadmap hiện tại?')) return;
     await roadmapService.deleteRoadmap(roadmap.id);
+    toast.success('Đã xoá lộ trình');
     refreshRoadmap();
   };
 
@@ -209,7 +220,7 @@ export function RoadmapPage() {
     if (!selectedNode) return;
 
     if (editStatus === 2 && !certUrl.trim()) {
-      alert("Vui lòng nhập Link chứng chỉ (URL) để xác nhận đã hoàn thành kỹ năng này.");
+      toast.error("Vui lòng nhập Link chứng chỉ (URL) để xác nhận đã hoàn thành kỹ năng này.");
       return;
     }
 
@@ -230,7 +241,8 @@ export function RoadmapPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-120px)] flex flex-col gap-6 animate-fade-in">
+    <div className="h-[calc(100vh-120px)] flex flex-col gap-6 relative">
+      <div className="animate-fade-in flex flex-col gap-6 h-full">
       
       {/* ── Header ── */}
       <div className="flex items-center justify-between shrink-0">
@@ -240,7 +252,7 @@ export function RoadmapPage() {
         </div>
         <div className="flex gap-2">
           {roadmap && (
-            <button onClick={handleDeleteRoadmap} className="h-9 px-3 rounded-xl border text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition">
+            <button onClick={() => setShowDeleteModal(true)} className="h-9 px-3 rounded-xl border text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition">
               <Trash2 className="h-4 w-4" />
             </button>
           )}
@@ -290,8 +302,9 @@ export function RoadmapPage() {
             </div>
 
             <button
+              type="button"
               onClick={handleGenerate}
-              disabled={generating || !careerPath}
+              disabled={generating || !careerPath.trim()}
               className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-bold text-lg hover:bg-primary/90 transition flex items-center justify-center gap-3 disabled:opacity-50 shadow-xl shadow-primary/20"
             >
               {generating ? <Loader2 className="h-6 w-6 animate-spin" /> : <Sparkles className="h-6 w-6" />}
@@ -542,6 +555,16 @@ export function RoadmapPage() {
         </div>
       )}
 
+      </div>
+
+      {/* Add at the very end of return */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteRoadmap}
+        title="Xoá lộ trình?"
+        description="Bạn có chắc chắn muốn xoá lộ trình hiện tại? Mọi tiến trình của bạn sẽ bị mất."
+      />
     </div>
   );
 }

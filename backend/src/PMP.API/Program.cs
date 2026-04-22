@@ -19,6 +19,8 @@ using PMP.Infrastructure.Services.Chat;
 using PMP.Infrastructure.Hubs;
 using PMP.Application.Features.Dashboard.Interfaces;
 using PMP.Infrastructure.Services.Dashboard;
+using PMP.Application.Features.System.Interfaces;
+using PMP.Infrastructure.Services.System;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,7 +33,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:5174") // Vite ports
+        policy.WithOrigins("http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176", "http://localhost:5177")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
@@ -89,6 +91,10 @@ builder.Services.AddScoped<IFinanceService, FinanceService>();
 builder.Services.AddScoped<IRoadmapService, RoadmapService>();
 builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IAiChatService, AiChatService>();
+builder.Services.AddScoped<IAiService, GeminiService>();
+builder.Services.AddHttpClient();
 
 // JWT Authentication
 builder.Services.AddAuthentication(options =>
@@ -127,6 +133,7 @@ if (app.Environment.IsDevelopment())
         try
         {
             var context = services.GetRequiredService<ApplicationDbContext>();
+            await context.Database.MigrateAsync();
             var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
             await DbInitializer.SeedDataAsync(context, userManager);
         }
@@ -138,7 +145,8 @@ if (app.Environment.IsDevelopment())
     }
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
+app.UseStaticFiles();
 app.UseCors("AllowAll");
 
 app.UseAuthentication();

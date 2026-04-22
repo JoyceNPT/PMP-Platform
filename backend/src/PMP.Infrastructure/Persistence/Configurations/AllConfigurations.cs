@@ -47,7 +47,7 @@ public class AcademicYearConfiguration : IEntityTypeConfiguration<AcademicYear>
         builder.Property(a => a.YearOrder).IsRequired();
 
         builder.HasIndex(a => a.UserId);
-        builder.HasIndex(a => new { a.GpaConfigId, a.YearOrder }).IsUnique();
+        builder.HasIndex(a => new { a.GpaConfigId, a.YearOrder });
 
         builder.HasMany(a => a.Semesters)
             .WithOne(s => s.AcademicYear)
@@ -63,8 +63,8 @@ public class SemesterConfiguration : IEntityTypeConfiguration<Semester>
         builder.ToTable("Semesters");
         builder.HasKey(s => s.Id);
 
-        // Không thể trùng kỳ trong cùng 1 năm học
-        builder.HasIndex(s => new { s.AcademicYearId, s.SemesterType }).IsUnique();
+        // Cho phép nhiều kỳ (nếu cần, logic service sẽ kiểm soát)
+        builder.HasIndex(s => new { s.AcademicYearId, s.SemesterType });
 
         builder.HasMany(s => s.Courses)
             .WithOne(c => c.Semester)
@@ -86,8 +86,7 @@ public class CourseConfiguration : IEntityTypeConfiguration<Course>
 
         // precision(5,2): đủ cho 10.00, KHÔNG làm tròn
         builder.Property(c => c.Score)
-            .HasColumnType("numeric(5,2)")
-            .IsRequired();
+            .HasColumnType("numeric(5,2)");
 
         builder.HasIndex(c => c.UserId);
         builder.HasIndex(c => c.SemesterId);

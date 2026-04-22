@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useState } from 'react';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 
 export function LoginForm() {
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
@@ -18,12 +19,18 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const setAuth = useAuthStore((state) => state.setAuth);
   const navigate = useNavigate();
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   const onSubmit = async (data: LoginFormData) => {
     try {
+      let recaptchaValue = '';
+      if (executeRecaptcha) {
+        recaptchaValue = await executeRecaptcha('login');
+      }
+      
       setIsLoading(true);
       setError('');
-      const response = await authService.login(data);
+      const response = await authService.login({ ...data, recaptchaToken: recaptchaValue });
       if (response.succeeded) {
         setAuth(
           { id: response.data.userId, email: response.data.email, fullName: response.data.fullName },

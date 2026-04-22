@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'react-hot-toast';
 import { useGpaSummary } from '@/features/gpa/components/useGpaSummary';
 import { AcademicYearCard } from '@/features/gpa/components/AcademicYearCard';
 import { gpaService } from '@/services/gpa/gpaService';
@@ -17,19 +18,33 @@ export function GpaPage() {
   const [savingCfg, setSavingCfg]     = useState(false);
 
   const handleAddYear = async () => {
-    if (!yearName) return;
-    await gpaService.createYear(yearName, yearOrder);
-    setYearName('');
-    setAddingYear(false);
-    refresh();
+    if (!yearName) {
+      toast.error('Vui lòng nhập tên năm học');
+      return;
+    }
+    try {
+      await gpaService.createYear(yearName, yearOrder);
+      toast.success('Đã thêm năm học mới');
+      setYearName('');
+      setAddingYear(false);
+      refresh();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Không thể thêm năm học');
+    }
   };
 
   const handleSaveConfig = async () => {
     setSavingCfg(true);
-    await gpaService.upsertConfig(cfgForm);
-    setShowConfig(false);
-    setSavingCfg(false);
-    refresh();
+    try {
+      await gpaService.upsertConfig(cfgForm);
+      toast.success('Đã cập nhật cấu hình GPA');
+      setShowConfig(false);
+      refresh();
+    } catch (err: any) {
+      toast.error('Lỗi khi cập nhật cấu hình');
+    } finally {
+      setSavingCfg(false);
+    }
   };
 
   const openConfig = () => {
@@ -65,7 +80,8 @@ export function GpaPage() {
     : 0;
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
+    <div className="space-y-6 relative">
+      <div className="animate-fade-in-up space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -128,10 +144,11 @@ export function GpaPage() {
         </p>
       </div>
 
+
       {/* Academic Year list */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold">Năm học</h2>
+          <h2 className="text-lg font-bold tracking-tight">Chi tiết lộ trình học tập</h2>
           {!addingYear && (
             <button onClick={() => setAddingYear(true)}
               className="flex items-center gap-2 h-8 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition shadow shadow-primary/20">
@@ -150,7 +167,7 @@ export function GpaPage() {
             </div>
             <div className="w-24 space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Năm thứ</label>
-              <input type="number" min={1} max={6} value={yearOrder} onChange={e => setYearOrder(+e.target.value)}
+              <input type="number" min={1} max={10} value={yearOrder} onChange={e => setYearOrder(parseInt(e.target.value) || 1)}
                 className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
             </div>
             <button onClick={handleAddYear} className="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition">Tạo</button>
@@ -170,12 +187,14 @@ export function GpaPage() {
           <AcademicYearCard key={year.id} year={year} onRefresh={refresh} />
         ))}
       </div>
+      </div>
 
-      {/* Config modal */}
+      {/* Config modal (Outside the animated div to avoid fixed centering issues) */}
       {showConfig && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
           <div className="w-full max-w-md rounded-2xl border bg-card shadow-xl p-6 space-y-5 animate-fade-in-up">
             <h3 className="font-bold text-lg">Cấu hình chương trình học</h3>
+            {/* ... form content ... */}
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Tổng số môn học (cả khoá)</label>

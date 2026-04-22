@@ -67,6 +67,13 @@ public class GpaController : ControllerBase
         return result.Succeeded ? Ok(result) : NotFound(result);
     }
 
+    [HttpPut("years/{yearId:guid}")]
+    public async Task<IActionResult> UpdateYear(Guid yearId, [FromBody] UpdateAcademicYearRequest request)
+    {
+        var result = await _gpaService.UpdateAcademicYearAsync(GetUserId(), yearId, request);
+        return result.Succeeded ? Ok(result) : BadRequest(result);
+    }
+
     // ─── Semesters ───────────────────────────────────────────────────────────
 
     [HttpPost("semesters")]

@@ -74,6 +74,11 @@ export const gpaService = {
     await apiClient.delete(`/gpa/years/${yearId}`);
   },
 
+  updateYear: async (yearId: string, yearName: string, yearOrder: number): Promise<AcademicYear> => {
+    const res = await apiClient.put(`/gpa/years/${yearId}`, { yearName, yearOrder });
+    return res.data.data;
+  },
+
   createSemester: async (academicYearId: string, semesterType: number): Promise<Semester> => {
     const res = await apiClient.post('/gpa/semesters', { academicYearId, semesterType });
     return res.data.data;

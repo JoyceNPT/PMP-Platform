@@ -14,12 +14,12 @@ const navItems = [
   { key: 'common.chat',      href: "/chat",     icon: MessageSquare },
 ]
 
-export function Sidebar() {
+export function Sidebar({ className }: { className?: string }) {
   const { t } = useTranslation()
   const location = useLocation()
 
   return (
-    <aside className="hidden md:flex flex-col w-64 lg:w-72 h-screen border-r bg-card fixed left-0 top-0 z-40 transition-all duration-300">
+    <aside className={cn("hidden md:flex flex-col w-64 lg:w-72 h-screen border-r bg-card fixed left-0 top-0 z-40 transition-all duration-300", className)}>
       {/* Logo */}
       <div className="flex h-16 items-center px-6 border-b">
         <Link to="/" className="flex items-center gap-3">

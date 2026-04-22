@@ -25,7 +25,10 @@ export function RegisterPage() {
       const res = await authService.register(payload);
       if (res.succeeded) {
         setSuccess(true);
-        setTimeout(() => navigate('/login'), 2500);
+        if (res.message && res.message.includes('failed to send verification email')) {
+          setError(res.message); // Show warning but still mark as success
+        }
+        setTimeout(() => navigate('/login'), 5000); // Wait longer to see the message
       } else {
         setError(res.message || 'Đăng ký thất bại');
       }
@@ -44,6 +47,7 @@ export function RegisterPage() {
             <Check className="h-8 w-8 text-primary" />
           </div>
           <h2 className="text-2xl font-bold">Đăng ký thành công!</h2>
+          {error && <p className="text-amber-500 text-sm font-medium px-4">{error}</p>}
           <p className="text-muted-foreground text-sm">Đang chuyển đến trang đăng nhập...</p>
         </div>
       </div>

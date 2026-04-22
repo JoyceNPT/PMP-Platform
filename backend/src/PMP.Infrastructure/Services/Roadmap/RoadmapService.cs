@@ -4,6 +4,7 @@ using PMP.Application.Features.Roadmap.Interfaces;
 using PMP.Domain.Entities.Roadmap;
 using PMP.Domain.Enums;
 using PMP.Infrastructure.Persistence;
+using PMP.Infrastructure.Services.System;
 using PMP.Shared.Wrappers;
 using System.Text.Json;
 
@@ -12,10 +13,12 @@ namespace PMP.Infrastructure.Services.Roadmap;
 public class RoadmapService : IRoadmapService
 {
     private readonly ApplicationDbContext _db;
+    private readonly IAiService _aiService;
 
-    public RoadmapService(ApplicationDbContext db)
+    public RoadmapService(ApplicationDbContext db, IAiService aiService)
     {
         _db = db;
+        _aiService = aiService;
     }
 
     // ─── Profile ─────────────────────────────────────────────────────────────
@@ -104,88 +107,118 @@ public class RoadmapService : IRoadmapService
 
     public async Task<ApiResponse<CareerRoadmapDto>> GenerateAiRoadmapAsync(Guid userId, GenerateRoadmapRequest req)
     {
-        // 1. Deactivate current roadmap
-        var activeRoadmap = await _db.CareerRoadmaps.FirstOrDefaultAsync(r => r.UserId == userId && r.IsActive);
-        if (activeRoadmap != null)
+        try
         {
-            activeRoadmap.IsActive = false;
-        }
-
-        // 2. Call Gemini AI (MOCK for now)
-        // In a real app, we would analyze req.TargetLevel and current user skills
-        var profile = await _db.UserCareerProfiles.Include(p => p.Skills).FirstOrDefaultAsync(p => p.UserId == userId);
-        
-        if (profile == null || string.IsNullOrWhiteSpace(profile.Major))
-            return new ApiResponse<CareerRoadmapDto>("Vui lòng cập nhật Hồ sơ năng lực (Chuyên ngành) trước khi tạo lộ trình.");
-
-        var currentSkills = profile.Skills.Select(s => s.SkillName).ToList();
-
-        var mockNodes = new List<RoadmapNodeTemplate>
-        {
-            new() { Key = "basic", Title = $"Kiến thức {profile.Major}", Desc = $"Nền tảng {profile.Major}", Cat = "Cơ bản", Order = 1 },
-            new() { Key = "lang", Title = "Kỹ năng chuyên ngành", Desc = $"Nghiệp vụ {profile.CurrentJob ?? "chưa có"}", Cat = "Cơ bản", Order = 2, Pre = ["basic"] },
-            new() { Key = "db", Title = "Cơ sở dữ liệu", Desc = "SQL, NoSQL", Cat = "Dữ liệu", Order = 3, Pre = ["lang"] },
-            new() { Key = "web", Title = "Web Development", Desc = "HTML, CSS, JS", Cat = "Frontend", Order = 4, Pre = ["lang"] },
-            new() { Key = "framework", Title = "Frameworks", Desc = "React, ASP.NET Core", Cat = "Advanced", Order = 5, Pre = ["web", "db"] }
-        };
-
-        // If user already has some skills, we could skip or mark them (but here we just generate the roadmap)
-        // For a more realistic mock, let's adjust based on TargetLevel
-        if (req.TargetLevel >= 2) // Advanced/Expert
-        {
-            mockNodes.Add(new() { Key = "cloud", Title = "Cloud Computing", Desc = "AWS, Azure, Docker", Cat = "Expert", Order = 6, Pre = ["framework"] });
-            mockNodes.Add(new() { Key = "arch", Title = "System Architecture", Desc = "Microservices, DDD", Cat = "Expert", Order = 7, Pre = ["cloud"] });
-        }
-
-        var roadmap = new CareerRoadmap
-        {
-            UserId = userId,
-            CareerPath = req.CareerPath,
-            Source = RoadmapSource.AiGenerated,
-            IsActive = true,
-            RawData = JsonSerializer.Serialize(mockNodes)
-        };
-
-        _db.CareerRoadmaps.Add(roadmap);
-        await _db.SaveChangesAsync();
-
-        // 3. Create nodes with better positioning
-        var nodeEntities = mockNodes.Select((n, idx) => new RoadmapNode
-        {
-            RoadmapId = roadmap.Id,
-            NodeKey = n.Key,
-            Title = n.Title,
-            Description = n.Desc,
-            Category = n.Cat,
-            OrderIndex = n.Order,
-            PositionX = (idx % 3) * 300 + 100,
-            PositionY = (idx / 3) * 200 + 100
-        }).ToList();
-
-        _db.RoadmapNodes.AddRange(nodeEntities);
-        await _db.SaveChangesAsync();
-
-        // 4. Create prerequisites
-        foreach (var nodeTemplate in mockNodes.Where(n => n.Pre != null))
-        {
-            var node = nodeEntities.First(n => n.NodeKey == nodeTemplate.Key);
-            foreach (var preKey in nodeTemplate.Pre!)
+            // 1. Deactivate current roadmap
+            var activeRoadmap = await _db.CareerRoadmaps.FirstOrDefaultAsync(r => r.UserId == userId && r.IsActive);
+            if (activeRoadmap != null)
             {
-                var preNode = nodeEntities.FirstOrDefault(n => n.NodeKey == preKey);
-                if (preNode != null)
+                activeRoadmap.IsActive = false;
+            }
+
+            // 2. Call Gemini AI
+            var profile = await _db.UserCareerProfiles.Include(p => p.Skills).FirstOrDefaultAsync(p => p.UserId == userId);
+            
+            if (profile == null || string.IsNullOrWhiteSpace(profile.Major))
+                return new ApiResponse<CareerRoadmapDto>("Vui lòng cập nhật Hồ sơ năng lực (Chuyên ngành) trước khi tạo lộ trình.");
+
+            var currentSkills = string.Join(", ", profile.Skills.Select(s => s.SkillName));
+            var targetLevelStr = req.TargetLevel switch {
+                0 => "Beginner",
+                1 => "Intermediate",
+                2 => "Advanced",
+                3 => "Expert",
+                _ => "Intermediate"
+            };
+
+            var prompt = $@"
+                Create a detailed career roadmap for a user with the following profile:
+                - Major/Study: {profile.Major}
+                - Current Job: {profile.CurrentJob ?? "None/Student"}
+                - Experience: {profile.ExperienceYears} years
+                - Current Skills: {currentSkills}
+                - Goal: Become a {req.CareerPath} at {targetLevelStr} level.
+
+                The roadmap should be a list of steps (nodes) to achieve this goal.
+                Each step must include a unique key, title, brief description, a category (e.g., Fundamentals, Advanced, Tools), and an order index.
+                Also specify prerequisite keys if a step depends on another.
+
+                Return ONLY a JSON array of objects with this schema:
+                [
+                  {{
+                    ""key"": ""unique_id_string"",
+                    ""title"": ""Step Title"",
+                    ""desc"": ""Brief explanation"",
+                    ""cat"": ""Category Name"",
+                    ""order"": 1,
+                    ""pre"": [""prerequisite_key1""]
+                  }}
+                ]";
+
+            var systemPrompt = "You are a professional Career Coach and Technical Expert. You provide highly accurate and practical career roadmaps. Return raw JSON array only.";
+
+            var mockNodes = await _aiService.GetStructuredResponseAsync<List<RoadmapNodeTemplate>>(prompt, systemPrompt);
+
+            if (mockNodes == null || mockNodes.Count == 0)
+            {
+                // FALLBACK: Generate a high-quality static roadmap if AI fails (Quota issue)
+                mockNodes = GenerateFallbackNodes(profile, req);
+            }
+
+            var roadmap = new CareerRoadmap
+            {
+                UserId = userId,
+                CareerPath = req.CareerPath,
+                Source = RoadmapSource.AiGenerated,
+                IsActive = true,
+                RawData = JsonSerializer.Serialize(mockNodes)
+            };
+
+            _db.CareerRoadmaps.Add(roadmap);
+            await _db.SaveChangesAsync();
+
+            // 3. Create nodes with better positioning
+            var nodeEntities = mockNodes.Select((n, idx) => new RoadmapNode
+            {
+                RoadmapId = roadmap.Id,
+                NodeKey = n.Key,
+                Title = n.Title,
+                Description = n.Desc,
+                Category = n.Cat,
+                OrderIndex = n.Order,
+                PositionX = (idx % 3) * 300 + 100,
+                PositionY = (idx / 3) * 200 + 100
+            }).ToList();
+
+            _db.RoadmapNodes.AddRange(nodeEntities);
+            await _db.SaveChangesAsync();
+
+            // 4. Create prerequisites
+            foreach (var nodeTemplate in mockNodes.Where(n => n.Pre != null))
+            {
+                var node = nodeEntities.First(n => n.NodeKey == nodeTemplate.Key);
+                foreach (var preKey in nodeTemplate.Pre!)
                 {
-                    _db.RoadmapNodePrerequisites.Add(new RoadmapNodePrerequisite
+                    var preNode = nodeEntities.FirstOrDefault(n => n.NodeKey == preKey);
+                    if (preNode != null)
                     {
-                        NodeId = node.Id,
-                        PrerequisiteNodeId = preNode.Id
-                    });
+                        _db.RoadmapNodePrerequisites.Add(new RoadmapNodePrerequisite
+                        {
+                            NodeId = node.Id,
+                            PrerequisiteNodeId = preNode.Id
+                        });
+                    }
                 }
             }
+
+            await _db.SaveChangesAsync();
+
+            return await GetActiveRoadmapAsync(userId);
         }
-
-        await _db.SaveChangesAsync();
-
-        return await GetActiveRoadmapAsync(userId);
+        catch (Exception ex)
+        {
+            return new ApiResponse<CareerRoadmapDto>($"Lỗi hệ thống khi tạo lộ trình: {ex.Message}");
+        }
     }
 
     public async Task<ApiResponse<bool>> DeleteRoadmapAsync(Guid userId, Guid roadmapId)
@@ -301,6 +334,26 @@ public class RoadmapService : IRoadmapService
             CertificateUrl = progress?.CertificateUrl,
             PrerequisiteKeys = n.Prerequisites.Select(p => p.PrerequisiteNode.NodeKey).ToList()
         };
+    }
+
+    private List<RoadmapNodeTemplate> GenerateFallbackNodes(UserCareerProfile profile, GenerateRoadmapRequest req)
+    {
+        // Simple but high-quality fallback based on the goal
+        var nodes = new List<RoadmapNodeTemplate>
+        {
+            new() { Key = "f1", Title = $"Nền tảng {profile.Major}", Desc = "Ôn tập các kiến thức cốt lõi và tư duy căn bản.", Cat = "Nền tảng", Order = 1 },
+            new() { Key = "f2", Title = "Kỹ năng chuyên môn", Desc = $"Nghiệp vụ cần thiết cho vị trí {req.CareerPath}.", Cat = "Chuyên môn", Order = 2, Pre = ["f1"] },
+            new() { Key = "f3", Title = "Công cụ & Quy trình", Desc = "Làm quen với các phần mềm và phương pháp làm việc thực tế.", Cat = "Công cụ", Order = 3, Pre = ["f2"] },
+            new() { Key = "f4", Title = "Dự án thực tế", Desc = "Xây dựng portfolio và áp dụng kiến thức vào bài toán thực tế.", Cat = "Thực hành", Order = 4, Pre = ["f3"] },
+            new() { Key = "f5", Title = "Nâng cao & Mở rộng", Desc = $"Hoàn thiện kỹ năng để đạt mức {req.TargetLevel}.", Cat = "Nâng cao", Order = 5, Pre = ["f4"] }
+        };
+
+        if (req.TargetLevel >= 2) // Advanced
+        {
+            nodes.Add(new() { Key = "f6", Title = "Tối ưu hóa & Kiến trúc", Desc = "Nâng cao hiệu suất và tư duy hệ thống quy mô lớn.", Cat = "Expert", Order = 6, Pre = ["f5"] });
+        }
+
+        return nodes;
     }
 
     private class RoadmapNodeTemplate

@@ -22,7 +22,7 @@ export type LoginFormData = z.infer<typeof loginSchema>;
 export type RegisterFormData = z.infer<typeof registerSchema>;
 
 export const authService = {
-  login: async (data: LoginFormData) => {
+  login: async (data: LoginFormData & { recaptchaToken: string }) => {
     const response = await apiClient.post('/auth/login', data);
     return response.data;
   },
@@ -31,6 +31,38 @@ export const authService = {
     const response = await apiClient.post('/auth/register', data);
     return response.data;
   },
-  
-  // Future: logout, refreshToken, googleLogin...
+
+  googleLogin: async (idToken: string) => {
+    const response = await apiClient.post('/auth/google-login', `"${idToken}"`, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return response.data;
+  },
+
+  getProfile: async () => {
+    const response = await apiClient.get('/Auth/me');
+    return response.data;
+  },
+
+  updateProfile: async (data: any) => {
+    const response = await apiClient.put('/Auth/profile', data);
+    return response.data;
+  },
+
+  forgotPassword: async (email: string) => {
+    const response = await apiClient.post('/Auth/forgot-password', `"${email}"`, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return response.data;
+  },
+
+  resetPassword: async (data: any) => {
+    const response = await apiClient.post('/Auth/reset-password', data);
+    return response.data;
+  },
+
+  verifyEmail: async (email: string, token: string) => {
+    const response = await apiClient.get(`/Auth/verify-email?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`);
+    return response.data;
+  }
 };

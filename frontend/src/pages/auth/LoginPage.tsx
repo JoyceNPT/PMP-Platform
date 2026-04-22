@@ -5,6 +5,8 @@ import { useAuthStore } from '@/store/authStore';
 import { authService, loginSchema, type LoginFormData } from '@/services/authService';
 import { useState } from 'react';
 import { Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
+import { GoogleLogin } from '@react-oauth/google';
 
 export function LoginPage() {
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
@@ -15,20 +17,58 @@ export function LoginPage() {
   const [showPass, setShowPass]   = useState(false);
   const setAuth = useAuthStore(s => s.setAuth);
   const navigate = useNavigate();
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   const onSubmit = async (data: LoginFormData) => {
     try {
+      if (executeRecaptcha) {
+        recaptchaValue = await executeRecaptcha('login');
+      }
+      
+      // Bypass for local testing if needed
+      if (!recaptchaValue && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+        recaptchaValue = 'MOCK_TOKEN';
+      }
+      
       setIsLoading(true);
       setError('');
-      const res = await authService.login(data);
+      const res = await authService.login({ ...data, recaptchaToken: recaptchaValue });
       if (res.succeeded) {
-        setAuth({ id: res.data.userId, email: res.data.email, fullName: res.data.fullName }, res.data.accessToken);
+        setAuth({ 
+          id: res.data.userId, 
+          email: res.data.email, 
+          fullName: res.data.fullName,
+          avatarUrl: res.data.avatarUrl 
+        }, res.data.accessToken);
         navigate('/');
       } else {
         setError(res.message || 'Đăng nhập thất bại');
       }
     } catch (e: any) {
       setError(e.response?.data?.message || 'Có lỗi xảy ra, thử lại sau');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const res = await authService.googleLogin(credentialResponse.credential);
+      if (res.succeeded) {
+        setAuth({ 
+          id: res.data.userId, 
+          email: res.data.email, 
+          fullName: res.data.fullName,
+          avatarUrl: res.data.avatarUrl 
+        }, res.data.accessToken);
+        navigate('/');
+      } else {
+        setError(res.message || 'Đăng nhập Google thất bại');
+      }
+    } catch (e: any) {
+      setError(e.response?.data?.message || 'Lỗi xác thực Google');
     } finally {
       setIsLoading(false);
     }
@@ -109,7 +149,7 @@ export function LoginPage() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium" htmlFor="password">Mật khẩu</label>
-                <a href="#" className="text-xs text-primary hover:underline">Quên mật khẩu?</a>
+                <Link to="/forgot-password" className="text-xs text-primary hover:underline">Quên mật khẩu?</Link>
               </div>
               <div className="relative">
                 <input
@@ -142,6 +182,23 @@ export function LoginPage() {
                 <>Đăng nhập <ArrowRight className="h-4 w-4" /></>
               )}
             </button>
+
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Hoặc tiếp tục với</span>
+              </div>
+            </div>
+
+            <div className="flex justify-center">
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={() => setError('Đăng nhập Google không thành công')}
+                useOneTap
+                theme="outline"
+                shape="pill"
+              />
+            </div>
           </form>
 
           <p className="text-center text-sm text-muted-foreground">

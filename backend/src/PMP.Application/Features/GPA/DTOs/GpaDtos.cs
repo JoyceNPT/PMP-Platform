@@ -33,6 +33,12 @@ public class CreateAcademicYearRequest
     public int YearOrder { get; set; }                      // 1 / 2 / 3 / 4
 }
 
+public class UpdateAcademicYearRequest
+{
+    public string YearName { get; set; } = string.Empty;
+    public int YearOrder { get; set; }
+}
+
 // ─── Semester ────────────────────────────────────────────────────────────────
 
 public class SemesterDto
@@ -62,7 +68,7 @@ public class CourseDto
     public string CourseCode { get; set; } = string.Empty;
     public string CourseName { get; set; } = string.Empty;
     public int Credits { get; set; }
-    public decimal Score { get; set; }
+    public decimal? Score { get; set; }
     public string GradeLabel { get; set; } = string.Empty;  // A+, A, B+, …
 }
 
@@ -72,7 +78,7 @@ public class CreateCourseRequest
     public string CourseCode { get; set; } = string.Empty;
     public string CourseName { get; set; } = string.Empty;
     public int Credits { get; set; }
-    public decimal Score { get; set; }
+    public decimal? Score { get; set; }
 }
 
 public class UpdateCourseRequest
@@ -80,7 +86,7 @@ public class UpdateCourseRequest
     public string CourseCode { get; set; } = string.Empty;
     public string CourseName { get; set; } = string.Empty;
     public int Credits { get; set; }
-    public decimal Score { get; set; }
+    public decimal? Score { get; set; }
 }
 
 // ─── GPA Summary (Tổng hợp dashboard) ───────────────────────────────────────
