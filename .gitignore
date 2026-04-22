@@ -31,3 +31,9 @@ Thumbs.db
 # Build results
 [Bb]in/
 [Oo]bj/
+
+# Secrets & Config
+backend/src/PMP.API/appsettings.Development.json
+backend/src/PMP.API/appsettings.local.json
+.env
+*.local
