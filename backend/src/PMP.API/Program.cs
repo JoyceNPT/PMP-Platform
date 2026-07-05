@@ -35,7 +35,7 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins("http://localhost:5173", "http://localhost:5174",
         "http://localhost:5175", "http://localhost:5176", "http://localhost:5177",
-        "https://personal-management-platform.onrender.com", "https://pmp-platform-nu.vercel.app/")
+        "https://personal-management-platform.onrender.com", "https://pmp-platform-nu.vercel.app")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
