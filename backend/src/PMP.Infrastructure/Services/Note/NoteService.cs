@@ -8,6 +8,8 @@ namespace PMP.Infrastructure.Services.Note;
 
 public class NoteService : INoteService
 {
+    private const string DefaultContent = """[{"type":"paragraph","content":[]}]""";
+
     private readonly ApplicationDbContext _context;
 
     public NoteService(ApplicationDbContext context)
@@ -28,6 +30,13 @@ public class NoteService : INoteService
             CreatedAt = note.CreatedAt,
             UpdatedAt = note.UpdatedAt
         };
+    }
+
+    private static string NormalizeContent(string? content)
+    {
+        return string.IsNullOrWhiteSpace(content) || content.Trim() == "[]"
+            ? DefaultContent
+            : content;
     }
 
     public async Task<ApiResponse<List<NoteDto>>> GetUserNotesAsync(Guid userId)
@@ -58,7 +67,7 @@ public class NoteService : INoteService
         {
             UserId = userId,
             Title = request.Title,
-            Content = request.Content,
+            Content = NormalizeContent(request.Content),
             CoverImage = request.CoverImage,
             Icon = request.Icon,
             IsPinned = request.IsPinned
@@ -79,7 +88,7 @@ public class NoteService : INoteService
             return new ApiResponse<NoteDto>("Note not found.");
 
         if (request.Title != null) note.Title = request.Title;
-        if (request.Content != null) note.Content = request.Content;
+        if (request.Content != null) note.Content = NormalizeContent(request.Content);
         if (request.CoverImage != null) note.CoverImage = request.CoverImage;
         if (request.Icon != null) note.Icon = request.Icon;
         if (request.IsPinned.HasValue) note.IsPinned = request.IsPinned.Value;

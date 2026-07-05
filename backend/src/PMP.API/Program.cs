@@ -3,6 +3,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using PMP.Domain.Entities.Auth;
 using PMP.Infrastructure.Persistence;
 using Microsoft.OpenApi.Models;
@@ -77,7 +78,44 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // Database
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Host=localhost;Database=PmpDb;Username=postgres;Password=postgres";
+static string NormalizePostgresConnectionString(string connectionString)
+{
+    if (!connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
+        !connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+    {
+        return connectionString;
+    }
+
+    var uri = new Uri(connectionString);
+    var userInfo = uri.UserInfo.Split(':', 2);
+    var npgsqlBuilder = new NpgsqlConnectionStringBuilder
+    {
+        Host = uri.Host,
+        Port = uri.IsDefaultPort ? 5432 : uri.Port,
+        Database = uri.AbsolutePath.TrimStart('/'),
+        Username = Uri.UnescapeDataString(userInfo.ElementAtOrDefault(0) ?? string.Empty),
+        Password = Uri.UnescapeDataString(userInfo.ElementAtOrDefault(1) ?? string.Empty)
+    };
+
+    var query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+    foreach (var pair in query)
+    {
+        var parts = pair.Split('=', 2);
+        var key = Uri.UnescapeDataString(parts[0]).Replace("_", " ");
+        var value = Uri.UnescapeDataString(parts.ElementAtOrDefault(1) ?? string.Empty);
+
+        if (key.Equals("sslmode", StringComparison.OrdinalIgnoreCase))
+            key = "SSL Mode";
+
+        npgsqlBuilder[key] = value;
+    }
+
+    return npgsqlBuilder.ConnectionString;
+}
+
+var connectionString = NormalizePostgresConnectionString(
+    builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? "Host=localhost;Database=PmpDb;Username=postgres;Password=postgres");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString));
 

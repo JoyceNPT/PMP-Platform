@@ -17,6 +17,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import { CONFIG } from '@/config';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 /* ─── Protected Route ─────────────────────────────────────────────── */
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -83,7 +84,9 @@ function AppContent() {
           } />
           <Route path="/notes" element={
             <ProtectedRoute>
-              <MainLayout><NotesPage /></MainLayout>
+              <ErrorBoundary>
+                <MainLayout><NotesPage /></MainLayout>
+              </ErrorBoundary>
             </ProtectedRoute>
           } />
           <Route path="/settings" element={

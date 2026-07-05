@@ -1,8 +1,8 @@
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
 import '@blocknote/mantine/style.css';
-import { useEffect, useState, useCallback } from 'react';
-import { noteService, type NoteDto } from '@/services/note/noteService';
+import { useState, useCallback } from 'react';
+import { DEFAULT_NOTE_CONTENT, noteService, type NoteDto } from '@/services/note/noteService';
 import { toast } from 'react-hot-toast';
 import { Smile, Image as ImageIcon } from 'lucide-react';
 
@@ -11,16 +11,24 @@ interface NoteEditorProps {
   onUpdate: (updatedNote: NoteDto) => void;
 }
 
+const parseInitialContent = (content?: string) => {
+  try {
+    const parsed = content ? JSON.parse(content) : JSON.parse(DEFAULT_NOTE_CONTENT);
+    return Array.isArray(parsed) && parsed.length > 0
+      ? parsed
+      : JSON.parse(DEFAULT_NOTE_CONTENT);
+  } catch {
+    return JSON.parse(DEFAULT_NOTE_CONTENT);
+  }
+};
+
 export function NoteEditor({ note, onUpdate }: NoteEditorProps) {
   const [title, setTitle] = useState(note.title);
   const [icon, setIcon] = useState(note.icon || '');
   const [coverImage, setCoverImage] = useState(note.coverImage || '');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Parse Initial Content
-  const initialContent = note.content && note.content !== '[]' 
-    ? JSON.parse(note.content) 
-    : undefined;
+  const initialContent = parseInitialContent(note.content);
 
   const editor = useCreateBlockNote({
     initialContent,

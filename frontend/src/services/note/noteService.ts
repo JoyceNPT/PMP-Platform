@@ -1,5 +1,12 @@
 import apiClient from '../apiClient';
 
+export const DEFAULT_NOTE_CONTENT = JSON.stringify([
+  {
+    type: 'paragraph',
+    content: [],
+  },
+]);
+
 export interface NoteDto {
   id: string;
   title: string;

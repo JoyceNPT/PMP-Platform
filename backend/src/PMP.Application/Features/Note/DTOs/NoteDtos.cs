@@ -20,7 +20,7 @@ public class CreateNoteRequest
     [MaxLength(255)]
     public string Title { get; set; } = "Khong co tieu de";
 
-    public string Content { get; set; } = "[]";
+    public string Content { get; set; } = """[{"type":"paragraph","content":[]}]""";
     public string? CoverImage { get; set; }
     public string? Icon { get; set; }
     public bool IsPinned { get; set; } = false;

@@ -13,7 +13,7 @@ public class Note : BaseEntity
     public string Title { get; set; } = "Khong co tieu de";
     
     // JSON content from BlockNote/TipTap
-    public string Content { get; set; } = "[]";
+    public string Content { get; set; } = """[{"type":"paragraph","content":[]}]""";
 
     public string? CoverImage { get; set; }
     public string? Icon { get; set; }

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { noteService, type NoteDto } from '@/services/note/noteService';
+import { DEFAULT_NOTE_CONTENT, noteService, type NoteDto } from '@/services/note/noteService';
 import { NoteEditor } from '@/features/note/components/NoteEditor';
 import { FileText, Plus, Pin, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export function NotesPage() {
   const [notes, setNotes] = useState<NoteDto[]>([]);
@@ -34,7 +35,7 @@ export function NotesPage() {
     try {
       const res = await noteService.createNote({
         title: 'Không có tiêu đề',
-        content: '[]',
+        content: DEFAULT_NOTE_CONTENT,
         isPinned: false
       });
       if (res.succeeded) {
@@ -151,7 +152,23 @@ export function NotesPage() {
       {/* Main Editor Area */}
       <div className="flex-1 overflow-y-auto bg-background">
         {activeNote ? (
-          <NoteEditor key={activeNote.id} note={activeNote} onUpdate={handleUpdateNote} />
+          <ErrorBoundary
+            key={activeNote.id}
+            fallback={(error) => (
+              <div className="h-full flex flex-col items-center justify-center px-6 text-center">
+                <FileText className="w-16 h-16 mb-4 text-destructive/40" />
+                <h2 className="text-lg font-semibold text-foreground">Không thể mở ghi chú này</h2>
+                <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+                  Nội dung ghi chú hoặc trình soạn thảo đang gặp lỗi khi render.
+                </p>
+                <pre className="mt-4 max-w-xl overflow-auto rounded-md border bg-muted p-3 text-left text-xs text-muted-foreground">
+                  {error.message}
+                </pre>
+              </div>
+            )}
+          >
+            <NoteEditor note={activeNote} onUpdate={handleUpdateNote} />
+          </ErrorBoundary>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
             <FileText className="w-16 h-16 mb-4 opacity-20" />
