@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { 
   Send, Plus, Bot, User, 
   Search, MoreVertical, Paperclip, 
-  Loader2, MessageSquare, Trash2 
+  Loader2, MessageSquare, Trash2, ArrowLeft 
 } from 'lucide-react';
 import { useChat } from '@/features/chat/components/useChat';
 import { format } from 'date-fns';
@@ -12,7 +12,7 @@ import { toast } from 'react-hot-toast';
 export function ChatPage() {
   const { 
     conversations, activeConv, setActiveConv, 
-    messages, loading, sendMessage, createConversation, deleteConversation 
+    messages, loading, isAiTyping, sendMessage, createConversation, deleteConversation 
   } = useChat();
 
   const [input, setInput] = useState('');
@@ -23,7 +23,7 @@ export function ChatPage() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isAiTyping]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -66,7 +66,7 @@ export function ChatPage() {
     <div className="h-[calc(100vh-120px)] flex bg-card rounded-3xl border overflow-hidden shadow-sm animate-fade-in">
       
       {/* ── Sidebar: Conversation List ── */}
-      <div className="w-80 border-r flex flex-col bg-muted/10">
+      <div className={`w-full md:w-80 border-r flex flex-col bg-muted/10 ${activeConv ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-4 border-b space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-lg">Tin nhắn</h2>
@@ -120,12 +120,19 @@ export function ChatPage() {
       </div>
 
       {/* ── Main: Chat Area ── */}
-      <div className="flex-1 flex flex-col bg-background">
+      <div className={`flex-1 flex flex-col bg-background ${activeConv ? 'flex' : 'hidden md:flex'}`}>
         {activeConv ? (
           <>
             {/* Chat Header */}
-            <div className="h-16 px-6 border-b flex items-center justify-between bg-card">
+            <div className="h-16 px-4 md:px-6 border-b flex items-center justify-between bg-card">
               <div className="flex items-center gap-3">
+                {/* Mobile Back Button */}
+                <button
+                  onClick={() => setActiveConv(null)}
+                  className="md:hidden p-1.5 hover:bg-muted rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+                </button>
                 <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${activeConv.type === 0 ? 'bg-violet-100 text-violet-600' : 'bg-blue-100 text-blue-600'}`}>
                   {activeConv.type === 0 ? <Bot className="h-5 w-5" /> : <User className="h-5 w-5" />}
                 </div>
@@ -165,6 +172,16 @@ export function ChatPage() {
                   </div>
                 );
               })}
+              {isAiTyping && (
+                <div className="flex justify-start animate-fade-in-up">
+                  <div className="max-w-[75%] space-y-1">
+                    <div className="px-4 py-3 rounded-2xl text-sm bg-card border rounded-bl-none flex items-center gap-2 animate-pulse">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />
+                      <span className="text-muted-foreground font-medium text-xs">Trợ lý PMP đang soạn tin...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Input Area */}

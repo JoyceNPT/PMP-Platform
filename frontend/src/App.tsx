@@ -6,6 +6,7 @@ import { FinancePage } from '@/pages/finance/FinancePage';
 import { RoadmapPage } from '@/pages/roadmap/RoadmapPage';
 import { ChatPage } from '@/pages/chat/ChatPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
+import { NotesPage } from '@/pages/note/NotesPage';
 import { SettingsPage } from '@/pages/settings/SettingsPage';
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
@@ -78,6 +79,11 @@ function AppContent() {
           <Route path="/chat" element={
             <ProtectedRoute>
               <MainLayout><ChatPage /></MainLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/notes" element={
+            <ProtectedRoute>
+              <MainLayout><NotesPage /></MainLayout>
             </ProtectedRoute>
           } />
           <Route path="/settings" element={

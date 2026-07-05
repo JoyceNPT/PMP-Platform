@@ -22,12 +22,14 @@ public class AuthService : IAuthService
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IConfiguration _configuration;
     private readonly IEmailService _emailService;
+    private readonly ISystemSettingService _systemSettingService;
 
-    public AuthService(UserManager<ApplicationUser> userManager, IConfiguration configuration, IEmailService emailService)
+    public AuthService(UserManager<ApplicationUser> userManager, IConfiguration configuration, IEmailService emailService, ISystemSettingService systemSettingService)
     {
         _userManager = userManager;
         _configuration = configuration;
         _emailService = emailService;
+        _systemSettingService = systemSettingService;
     }
 
     public async Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request)
@@ -96,6 +98,12 @@ public class AuthService : IAuthService
         if (user == null || !await _userManager.CheckPasswordAsync(user, request.Password))
             return new ApiResponse<AuthResponse>("Invalid credentials.");
 
+        var requireVerification = await _systemSettingService.GetSettingBoolAsync("Verified", false);
+        if (requireVerification && !user.EmailConfirmed)
+        {
+            return new ApiResponse<AuthResponse>("Tài khoản của bạn chưa được xác thực email. Vui lòng xác thực email trước khi đăng nhập.");
+        }
+
         var accessToken = GenerateJwtToken(user);
         var refreshToken = GenerateRefreshToken();
 
@@ -116,9 +124,13 @@ public class AuthService : IAuthService
     {
         try
         {
+            var googleClientId = _configuration["ExternalServices:Google:ClientId"]
+                ?? Environment.GetEnvironmentVariable("ExternalServices__Google__ClientId")
+                ?? Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
+
             var settings = new GoogleJsonWebSignature.ValidationSettings
             {
-                Audience = new List<string> { _configuration["ExternalServices:Google:ClientId"]! }
+                Audience = new List<string> { googleClientId! }
             };
 
             var payload = await GoogleJsonWebSignature.ValidateAsync(idToken, settings);
@@ -263,12 +275,21 @@ public class AuthService : IAuthService
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
-        var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
+        var jwtKey = _configuration["Jwt:Key"]
+            ?? Environment.GetEnvironmentVariable("Jwt__Key")
+            ?? Environment.GetEnvironmentVariable("JWT_KEY")
+            ?? "SuperSecretKeyForDevelopmentOnlyShouldBeChangedInProductionAndStoredInSecretManager";
+
+        var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+
+        var issuer = _configuration["Jwt:Issuer"] ?? "PmpAPI";
+        var audience = _configuration["Jwt:Audience"] ?? "PmpClient";
+        var expirationMin = _configuration["Jwt:AccessTokenExpirationMinutes"] ?? "15";
 
         var token = new JwtSecurityToken(
-            issuer: _configuration["Jwt:Issuer"],
-            audience: _configuration["Jwt:Audience"],
-            expires: DateTime.UtcNow.AddMinutes(double.Parse(_configuration["Jwt:AccessTokenExpirationMinutes"]!)),
+            issuer: issuer,
+            audience: audience,
+            expires: DateTime.UtcNow.AddMinutes(double.Parse(expirationMin)),
             claims: authClaims,
             signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
         );
@@ -292,7 +313,9 @@ public class AuthService : IAuthService
         try 
         {
             using var client = new HttpClient();
-            var secretKey = _configuration["ExternalServices:Recaptcha:SecretKey"];
+            var secretKey = _configuration["ExternalServices:Recaptcha:SecretKey"]
+                ?? Environment.GetEnvironmentVariable("ExternalServices__Recaptcha__SecretKey")
+                ?? Environment.GetEnvironmentVariable("RECAPTCHA_SECRET_KEY");
             var response = await client.PostAsync($"https://www.google.com/recaptcha/api/siteverify?secret={secretKey}&response={token}", null);
             
             if (!response.IsSuccessStatusCode) return false;

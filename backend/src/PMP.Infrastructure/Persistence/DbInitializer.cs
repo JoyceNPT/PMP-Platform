@@ -6,6 +6,7 @@ using PMP.Domain.Entities.GPA;
 using PMP.Domain.Entities.Roadmap;
 using PMP.Domain.Enums;
 using PMP.Infrastructure.Persistence;
+using PMP.Domain.Entities.System;
 
 namespace PMP.Infrastructure.Persistence;
 
@@ -132,6 +133,17 @@ public static class DbInitializer
                 NodeId = nodes[0].Id,
                 Status = NodeStatus.Completed,
                 CompletedAt = DateTime.UtcNow.AddDays(-10)
+            });
+        }
+
+        // 6. Seed System Settings
+        if (!await context.SystemSettings.AnyAsync())
+        {
+            context.SystemSettings.AddRange(new List<SystemSetting>
+            {
+                new() { Key = "NavbarAnnouncement", Value = "Chào mừng bạn đến với PMP Platform! Chúc bạn một ngày học tập và làm việc hiệu quả. Trợ lý PMP luôn sẵn sàng hỗ trợ bạn 24/7! 🎉" },
+                new() { Key = "Verified", Value = "false" },
+                new() { Key = "Storage", Value = "Cloudinary" }
             });
         }
 

@@ -50,6 +50,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<FileAttachment> FileAttachments => Set<FileAttachment>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+
+    // ── Notes ────────────────────────────────────────────────────────────────
+    public DbSet<Domain.Entities.Note.Note> Notes => Set<Domain.Entities.Note.Note>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -87,6 +91,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
         builder.Entity<AdminChatAgent>().HasQueryFilter(a => !a.IsDeleted);
         builder.Entity<Notification>().HasQueryFilter(n => !n.IsDeleted);
         builder.Entity<FileAttachment>().HasQueryFilter(f => !f.IsDeleted);
+        builder.Entity<Domain.Entities.Note.Note>().HasQueryFilter(n => !n.IsDeleted);
+        builder.Entity<SystemSetting>().HasQueryFilter(s => !s.IsDeleted);
+
+        builder.Entity<SystemSetting>(entity =>
+        {
+            entity.HasIndex(s => s.Key).IsUnique();
+        });
 
         // AuditLog & token tables: KHÔNG có soft delete filter
     }

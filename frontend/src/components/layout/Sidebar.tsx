@@ -1,10 +1,11 @@
 import { Link, useLocation } from "react-router-dom"
 import {
   LayoutDashboard, GraduationCap, Wallet,
-  Route, MessageSquare, Settings, ChevronRight
+  Route, MessageSquare, Settings, FileText
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
+import { Logo } from "@/components/shared/Logo"
 
 const navItems = [
   { key: 'common.dashboard', href: "/",         icon: LayoutDashboard },
@@ -12,19 +13,27 @@ const navItems = [
   { key: 'common.finance',   href: "/finance",  icon: Wallet },
   { key: 'common.roadmap',   href: "/roadmap",  icon: Route },
   { key: 'common.chat',      href: "/chat",     icon: MessageSquare },
+  { key: 'common.notes',     href: "/notes",    icon: FileText },
 ]
 
-export function Sidebar({ className }: { className?: string }) {
+export function Sidebar({ className, isMobile = false }: { className?: string; isMobile?: boolean }) {
   const { t } = useTranslation()
   const location = useLocation()
 
   return (
-    <aside className={cn("hidden md:flex flex-col w-72 h-screen border-r border-border bg-card/50 backdrop-blur-xl fixed left-0 top-0 z-40 transition-all duration-500", className)}>
+    <aside
+      className={cn(
+        isMobile
+          ? "flex flex-col w-full h-full bg-card/90 backdrop-blur-xl"
+          : "hidden md:flex flex-col w-72 h-screen border-r border-border bg-card/50 backdrop-blur-xl fixed left-0 top-0 z-40 transition-all duration-500",
+        className
+      )}
+    >
       {/* Premium Branding */}
       <div className="flex h-24 items-center px-8">
         <Link to="/" className="flex items-center gap-4 group">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30 group-hover:rotate-12 transition-all duration-500">
-            <span className="text-white text-2xl font-black">P</span>
+            <Logo size={28} />
           </div>
           <div className="flex flex-col">
             <span className="font-bold text-xl tracking-tighter leading-none">PMP</span>

@@ -25,7 +25,7 @@ public interface IFinanceService
 
     // ─── Summary & AI ─────────────────────────────────────────────────────────
     Task<ApiResponse<MonthlySummaryDto>> GetMonthlySummaryAsync(Guid userId, int year, int month);
-    Task<ApiResponse<AiPredictionDto>> GetAiPredictionAsync(Guid userId);
+    Task<ApiResponse<AiPredictionDto>> GetAiPredictionAsync(Guid userId, bool forceReload = false);
 
     // ─── Reset ───────────────────────────────────────────────────────────────
     Task<ApiResponse<bool>> ResetFinanceDataAsync(Guid userId);

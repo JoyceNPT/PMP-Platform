@@ -69,6 +69,23 @@ public class RoadmapNodeDto
     public string? Note { get; set; }
     public string? CertificateUrl { get; set; }
     public List<string> PrerequisiteKeys { get; set; } = [];
+    public bool IsCustom { get; set; }
+}
+
+public class AddCustomNodeRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string Category { get; set; } = string.Empty; // "Basic", "Advanced", "Master"
+    public List<Guid> PrerequisiteNodeIds { get; set; } = [];
+}
+
+public class UpdateCustomNodeRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string Category { get; set; } = string.Empty; // "Basic", "Advanced", "Master"
+    public List<Guid> PrerequisiteNodeIds { get; set; } = [];
 }
 
 // ─── Progress ────────────────────────────────────────────────────────────────

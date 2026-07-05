@@ -30,6 +30,7 @@ export interface RoadmapNode {
   note?: string;
   certificateUrl?: string;
   prerequisiteKeys: string[];
+  isCustom?: boolean;
 }
 
 export interface CareerRoadmap {
@@ -71,6 +72,20 @@ export const roadmapService = {
     return res.data.data;
   },
   deleteRoadmap: async (id: string) => apiClient.delete(`/roadmap/${id}`),
+
+  // Custom Nodes
+  addCustomNode: async (data: { title: string; description?: string; category: string; prerequisiteNodeIds: string[] }): Promise<RoadmapNode> => {
+    const res = await apiClient.post('/roadmap/node', data);
+    return res.data.data;
+  },
+  deleteCustomNode: async (nodeId: string): Promise<boolean> => {
+    const res = await apiClient.delete(`/roadmap/node/${nodeId}`);
+    return res.data.data;
+  },
+  updateCustomNode: async (nodeId: string, data: { title: string; description?: string; category: string; prerequisiteNodeIds: string[] }): Promise<RoadmapNode> => {
+    const res = await apiClient.put(`/roadmap/node/${nodeId}`, data);
+    return res.data.data;
+  },
 
   // Progress
   updateProgress: async (data: { nodeId: string; status: number; note?: string; certificateUrl?: string }) => {

@@ -109,8 +109,8 @@ public class FinanceController : ControllerBase
     }
 
     [HttpGet("ai-prediction")]
-    public async Task<IActionResult> GetAiPrediction()
-        => Ok(await _financeService.GetAiPredictionAsync(GetUserId()));
+    public async Task<IActionResult> GetAiPrediction([FromQuery] bool forceReload = false)
+        => Ok(await _financeService.GetAiPredictionAsync(GetUserId(), forceReload));
 
     [HttpDelete("reset")]
     public async Task<IActionResult> ResetFinanceData()

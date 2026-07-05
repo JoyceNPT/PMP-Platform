@@ -79,4 +79,27 @@ public class RoadmapController : ControllerBase
         var result = await _roadmapService.UpdateNodeProgressAsync(GetUserId(), request);
         return result.Succeeded ? Ok(result) : BadRequest(result);
     }
+
+    // ─── Custom Nodes ────────────────────────────────────────────────────────
+
+    [HttpPost("node")]
+    public async Task<IActionResult> AddCustomNode([FromBody] AddCustomNodeRequest request)
+    {
+        var result = await _roadmapService.AddCustomNodeAsync(GetUserId(), request);
+        return result.Succeeded ? Ok(result) : BadRequest(result);
+    }
+
+    [HttpDelete("node/{nodeId:guid}")]
+    public async Task<IActionResult> DeleteCustomNode(Guid nodeId)
+    {
+        var result = await _roadmapService.DeleteCustomNodeAsync(GetUserId(), nodeId);
+        return result.Succeeded ? Ok(result) : BadRequest(result);
+    }
+
+    [HttpPut("node/{nodeId:guid}")]
+    public async Task<IActionResult> UpdateCustomNode(Guid nodeId, [FromBody] UpdateCustomNodeRequest request)
+    {
+        var result = await _roadmapService.UpdateCustomNodeAsync(GetUserId(), nodeId, request);
+        return result.Succeeded ? Ok(result) : BadRequest(result);
+    }
 }

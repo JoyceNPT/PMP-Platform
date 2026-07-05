@@ -244,6 +244,7 @@ public class RoadmapNodeConfiguration : IEntityTypeConfiguration<RoadmapNode>
         builder.Property(r => r.NodeKey).IsRequired().HasMaxLength(100);
         builder.Property(r => r.Title).IsRequired().HasMaxLength(200);
         builder.Property(r => r.Category).HasMaxLength(100);
+        builder.Property(r => r.IsCustom).HasDefaultValue(false);
 
         // NodeKey unique trong 1 roadmap
         builder.HasIndex(r => new { r.RoadmapId, r.NodeKey }).IsUnique();

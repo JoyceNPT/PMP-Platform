@@ -3,19 +3,23 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { authService, registerSchema, type RegisterFormData } from '@/services/authService';
 import { useState } from 'react';
-import { Eye, EyeOff, ArrowRight, Loader2, Check } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, Loader2, Check, Sun, Moon, Sparkles } from 'lucide-react';
+import { Logo } from '@/components/shared/Logo';
+import { useTheme } from '@/components/theme-provider';
+import { Button } from '@/components/ui/button';
 
 export function RegisterPage() {
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterFormData>({
+  const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
   });
-  const [error, setError]       = useState('');
-  const [success, setSuccess]   = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showPass, setShowPass]   = useState(false);
+  const [error, setError]           = useState('');
+  const [success, setSuccess]       = useState(false);
+  const [isLoading, setIsLoading]   = useState(false);
+  const [showPass, setShowPass]     = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const navigate = useNavigate();
-  watch('password', ''); // keep validation reactive
+  const { theme, setTheme } = useTheme();
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
@@ -25,10 +29,7 @@ export function RegisterPage() {
       const res = await authService.register(payload);
       if (res.succeeded) {
         setSuccess(true);
-        if (res.message && res.message.includes('failed to send verification email')) {
-          setError(res.message); // Show warning but still mark as success
-        }
-        setTimeout(() => navigate('/login'), 5000); // Wait longer to see the message
+        setTimeout(() => navigate('/login'), 4000);
       } else {
         setError(res.message || 'Đăng ký thất bại');
       }
@@ -39,95 +40,129 @@ export function RegisterPage() {
     }
   };
 
+  const inputCls = `flex h-10 w-full rounded-xl border px-4 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 ${isDark ? 'border-white/[0.08] bg-white/[0.02] text-white placeholder:text-zinc-600 focus:border-primary/50' : 'border-slate-200 bg-slate-50/50 text-slate-900 placeholder:text-slate-400 focus:border-primary/50'}`;
+  const labelCls = `text-xs font-bold uppercase tracking-wider ${isDark ? 'text-zinc-400' : 'text-slate-500'}`;
+
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="text-center space-y-4 animate-fade-in-up">
-          <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-            <Check className="h-8 w-8 text-primary" />
+      <div className={`flex h-screen items-center justify-center transition-colors ${isDark ? 'bg-[#09090b] text-white' : 'bg-slate-50 text-slate-900'}`}>
+        <div className="text-center space-y-5 animate-fade-in-up px-6">
+          <div className={`mx-auto w-20 h-20 rounded-full flex items-center justify-center shadow-lg shadow-primary/20 ${isDark ? 'bg-primary/10 border border-primary/20' : 'bg-primary/5 border border-primary/10'}`}>
+            <Check className="h-10 w-10 text-primary" />
           </div>
-          <h2 className="text-2xl font-bold">Đăng ký thành công!</h2>
-          {error && <p className="text-amber-500 text-sm font-medium px-4">{error}</p>}
-          <p className="text-muted-foreground text-sm">Đang chuyển đến trang đăng nhập...</p>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-extrabold tracking-tight">Đăng ký thành công! 🎉</h2>
+            <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>Vui lòng kiểm tra email để xác thực tài khoản.</p>
+            <p className={`text-xs ${isDark ? 'text-zinc-600' : 'text-slate-400'}`}>Đang chuyển đến trang đăng nhập...</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen">
-      {/* Left panel */}
-      <div className="auth-bg hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative">
+    <div className={`flex h-screen overflow-hidden relative transition-colors duration-500 ${isDark ? 'bg-[#09090b] text-white' : 'bg-slate-50 text-slate-900'}`}>
+
+      {/* Background glows */}
+      <div className={`absolute top-[-20%] right-[-10%] w-[55%] h-[55%] rounded-full blur-[140px] pointer-events-none ${isDark ? 'bg-primary/10 opacity-70' : 'bg-accent/5 opacity-50'}`} />
+      <div className={`absolute bottom-[-20%] left-[-10%] w-[55%] h-[55%] rounded-full blur-[140px] pointer-events-none ${isDark ? 'bg-accent/10 opacity-60' : 'bg-primary/5 opacity-40'}`} />
+
+      {/* Theme Toggle */}
+      <div className="absolute top-6 right-6 z-50">
+        <Button variant="outline" size="icon" className="rounded-full shadow-md bg-background/80 border-border/40 backdrop-blur-md hover:scale-105 active:scale-95 transition-all"
+          onClick={() => setTheme(isDark ? 'light' : 'dark')}>
+          {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-violet-600" />}
+        </Button>
+      </div>
+
+      {/* Left panel — brand */}
+      <div className={`hidden lg:flex lg:w-[45%] flex-col justify-between p-10 xl:p-12 relative border-r overflow-y-auto transition-colors duration-500 ${isDark ? 'border-white/[0.06] bg-[#0d0d12]/40 backdrop-blur-3xl' : 'border-slate-200/60 bg-white/70 backdrop-blur-3xl'}`}>
+        <div className={`absolute inset-0 bg-[linear-gradient(to_right,#808080_1px,transparent_1px),linear-gradient(to_bottom,#808080_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none ${isDark ? 'opacity-[0.04]' : 'opacity-[0.03]'}`} />
+
         <div className="relative z-10 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-            <span className="text-primary-foreground font-bold text-base">P</span>
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/20">
+            <Logo size={22} />
           </div>
-          <span className="font-bold text-white text-lg">PMP Platform</span>
+          <span className="font-black tracking-tight text-lg">PMP Platform</span>
         </div>
-        <div className="relative z-10 space-y-4 animate-fade-in-up">
-          <h1 className="text-4xl font-bold text-white leading-tight">
-            Bắt đầu hành trình<br />
-            <span className="gradient-text">của bạn ngay hôm nay.</span>
+
+        <div className="relative z-10 space-y-6 my-auto max-w-md">
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${isDark ? 'bg-primary/10 border border-primary/20 text-primary' : 'bg-primary/5 border border-primary/10 text-primary'}`}>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Tham Gia Miễn Phí</span>
+          </div>
+
+          <h1 className="text-3xl xl:text-4xl font-black tracking-tight leading-[1.2]">
+            Bắt đầu hành trình <br />
+            <span className="bg-gradient-to-r from-primary via-purple-500 to-accent bg-clip-text text-transparent">của bạn ngay hôm nay.</span>
           </h1>
-          <p className="text-white/60 text-base max-w-sm">
-            Tạo tài khoản miễn phí và trải nghiệm nền tảng quản lý cá nhân thông minh nhất dành cho sinh viên.
+
+          <p className={`text-sm leading-relaxed ${isDark ? 'text-zinc-400' : 'text-slate-600'}`}>
+            Tạo tài khoản miễn phí và trải nghiệm nền tảng quản lý cá nhân thông minh — GPA, Tài chính, Lộ trình & AI đồng hành.
           </p>
-          <ul className="space-y-2 mt-4">
-            {['Miễn phí hoàn toàn', 'Bảo mật dữ liệu', 'Tích hợp AI', 'Không giới hạn tính năng'].map(f => (
-              <li key={f} className="flex items-center gap-2 text-white/70 text-sm">
-                <Check className="h-4 w-4 text-primary shrink-0" />
-                {f}
+
+          <ul className="space-y-3">
+            {[
+              { text: 'Hoàn toàn miễn phí, không giới hạn tính năng', icon: '✅' },
+              { text: 'Bảo mật dữ liệu chuẩn Enterprise', icon: '🔐' },
+              { text: 'Tích hợp Trợ lý AI thông minh 24/7', icon: '🤖' },
+              { text: 'Đồng bộ đa thiết bị tức thì', icon: '⚡' },
+            ].map(f => (
+              <li key={f.text} className={`flex items-start gap-3 text-sm ${isDark ? 'text-zinc-400' : 'text-slate-600'}`}>
+                <span className="shrink-0 mt-0.5">{f.icon}</span>
+                <span>{f.text}</span>
               </li>
             ))}
           </ul>
         </div>
-        <p className="relative z-10 text-white/30 text-xs">© 2025 Personal Management Platform</p>
+
+        <div className={`relative z-10 flex items-center justify-between text-2xs ${isDark ? 'text-zinc-600' : 'text-slate-400'}`}>
+          <span>© 2026 PMP Platform Corp.</span>
+          <span>Version 2.0</span>
+        </div>
       </div>
 
       {/* Right panel — form */}
-      <div className="flex flex-1 items-start justify-center px-6 py-10 overflow-y-auto bg-background">
-        <div className="w-full max-w-md space-y-6 animate-fade-in-up">
-          <div className="space-y-1">
-            <h2 className="text-3xl font-bold">Tạo tài khoản 🚀</h2>
-            <p className="text-muted-foreground text-sm">Điền thông tin bên dưới để đăng ký</p>
+      <div className="flex flex-1 items-center justify-center px-5 py-6 sm:px-8 relative overflow-y-auto">
+        <div className={`w-full max-w-[420px] p-6 sm:p-8 rounded-3xl border backdrop-blur-2xl transition-all duration-500 shadow-2xl ${isDark ? 'bg-[#0f0f16]/40 border-white/[0.04] shadow-black/40' : 'bg-white/90 border-slate-200/50 shadow-slate-100'}`}>
+
+          <div className="space-y-1 mb-6">
+            <h2 className="text-2xl font-extrabold tracking-tight">Tạo tài khoản 🚀</h2>
+            <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>Điền thông tin để bắt đầu hành trình</p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {error && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive animate-fade-in">
+              <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-400 font-medium">
                 {error}
               </div>
             )}
 
-            {/* Full name */}
+            {/* Full Name */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium" htmlFor="fullName">Họ và tên</label>
-              <input id="fullName" placeholder="Nguyễn Văn A" {...register('fullName')}
-                className="flex h-11 w-full rounded-xl border border-input bg-card px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition placeholder:text-muted-foreground" />
-              {errors.fullName && <p className="text-xs text-destructive">{errors.fullName.message}</p>}
+              <label className={labelCls} htmlFor="fullName">Họ và tên</label>
+              <input id="fullName" placeholder="Nguyễn Văn A" {...register('fullName')} className={inputCls} />
+              {errors.fullName && <p className="text-xs text-rose-500 font-semibold">{errors.fullName.message}</p>}
             </div>
 
             {/* Email */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium" htmlFor="email">Email</label>
-              <input id="email" type="email" placeholder="name@example.com" {...register('email')}
-                className="flex h-11 w-full rounded-xl border border-input bg-card px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition placeholder:text-muted-foreground" />
-              {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+              <label className={labelCls} htmlFor="reg-email">Email</label>
+              <input id="reg-email" type="email" placeholder="name@example.com" {...register('email')} className={inputCls} />
+              {errors.email && <p className="text-xs text-rose-500 font-semibold">{errors.email.message}</p>}
             </div>
 
             {/* Phone + Gender */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium" htmlFor="phoneNumber">Số điện thoại</label>
-                <input id="phoneNumber" placeholder="0987654321" {...register('phoneNumber')}
-                  className="flex h-11 w-full rounded-xl border border-input bg-card px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition placeholder:text-muted-foreground" />
-                {errors.phoneNumber && <p className="text-xs text-destructive">{errors.phoneNumber.message}</p>}
+                <label className={labelCls} htmlFor="phoneNumber">Số điện thoại</label>
+                <input id="phoneNumber" placeholder="0987654321" {...register('phoneNumber')} className={inputCls} />
+                {errors.phoneNumber && <p className="text-xs text-rose-500 font-semibold">{errors.phoneNumber.message}</p>}
               </div>
-
               <div className="space-y-1.5">
-                <label className="text-sm font-medium" htmlFor="gender">Giới tính</label>
+                <label className={labelCls} htmlFor="gender">Giới tính</label>
                 <select id="gender" {...register('gender', { valueAsNumber: true })}
-                  className="flex h-11 w-full rounded-xl border border-input bg-card px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition text-foreground">
+                  className={`${inputCls} cursor-pointer`}>
                   <option value={0}>Nam</option>
                   <option value={1}>Nữ</option>
                   <option value={2}>Khác</option>
@@ -137,44 +172,43 @@ export function RegisterPage() {
 
             {/* Password */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium" htmlFor="password">Mật khẩu</label>
+              <label className={labelCls} htmlFor="reg-password">Mật khẩu</label>
               <div className="relative">
-                <input id="password" type={showPass ? 'text' : 'password'} placeholder="Tối thiểu 6 ký tự" {...register('password')}
-                  className="flex h-11 w-full rounded-xl border border-input bg-card px-4 pr-11 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition placeholder:text-muted-foreground" />
+                <input id="reg-password" type={showPass ? 'text' : 'password'} placeholder="Tối thiểu 6 ký tự"
+                  {...register('password')} className={`${inputCls} pr-11`} />
                 <button type="button" onClick={() => setShowPass(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition">
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors ${isDark ? 'text-zinc-500 hover:text-white' : 'text-slate-400 hover:text-slate-800'}`}>
                   {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+              {errors.password && <p className="text-xs text-rose-500 font-semibold">{errors.password.message}</p>}
             </div>
 
-            {/* Confirm password */}
+            {/* Confirm Password */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium" htmlFor="confirmPassword">Xác nhận mật khẩu</label>
+              <label className={labelCls} htmlFor="confirmPassword">Xác nhận mật khẩu</label>
               <div className="relative">
-                <input id="confirmPassword" type={showConfirm ? 'text' : 'password'} placeholder="Nhập lại mật khẩu" {...register('confirmPassword')}
-                  className="flex h-11 w-full rounded-xl border border-input bg-card px-4 pr-11 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition placeholder:text-muted-foreground" />
+                <input id="confirmPassword" type={showConfirm ? 'text' : 'password'} placeholder="Nhập lại mật khẩu"
+                  {...register('confirmPassword')} className={`${inputCls} pr-11`} />
                 <button type="button" onClick={() => setShowConfirm(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition">
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors ${isDark ? 'text-zinc-500 hover:text-white' : 'text-slate-400 hover:text-slate-800'}`}>
                   {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>}
+              {errors.confirmPassword && <p className="text-xs text-rose-500 font-semibold">{errors.confirmPassword.message}</p>}
             </div>
 
             <button type="submit" disabled={isLoading}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all active:scale-[0.98] disabled:opacity-60 mt-2">
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-95 text-white text-sm font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300 active:scale-[0.98] disabled:opacity-60 mt-1">
               {isLoading
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Đang tạo tài khoản...</>
-                : <>Đăng ký ngay <ArrowRight className="h-4 w-4" /></>
-              }
+                : <>Đăng Ký Ngay <ArrowRight className="h-4 w-4" /></>}
             </button>
           </form>
 
-          <p className="text-center text-sm text-muted-foreground">
+          <p className="text-center text-sm text-muted-foreground mt-5">
             Đã có tài khoản?{' '}
-            <Link to="/login" className="font-semibold text-primary hover:underline">Đăng nhập</Link>
+            <Link to="/login" className="font-bold text-primary hover:opacity-85 transition-opacity">Đăng nhập</Link>
           </p>
         </div>
       </div>

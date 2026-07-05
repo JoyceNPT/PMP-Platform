@@ -8,6 +8,7 @@ export function useChat() {
   const [activeConv, setActiveConv]       = useState<Conversation | null>(null);
   const [messages, setMessages]           = useState<Message[]>([]);
   const [loading, setLoading]             = useState(true);
+  const [isAiTyping, setIsAiTyping]       = useState(false);
 
   // Initial load
   useEffect(() => {
@@ -25,6 +26,9 @@ export function useChat() {
       chatHub.start(token, (newMsg) => {
         // Use ref to check current active conversation to avoid stale closure
         if (newMsg.conversationId === activeConvIdRef.current) {
+          if (newMsg.role === 1) { // Assistant
+            setIsAiTyping(false);
+          }
           setMessages(prev => {
             if (prev.find(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
@@ -44,6 +48,7 @@ export function useChat() {
 
   // Join/Leave conversation group
   useEffect(() => {
+    setIsAiTyping(false);
     if (activeConv) {
       chatHub.joinConversation(activeConv.id);
       chatService.getMessages(activeConv.id).then(setMessages);
@@ -55,9 +60,22 @@ export function useChat() {
 
   const sendMessage = async (content: string) => {
     if (!activeConv || !content.trim()) return;
-    const msg = await chatService.sendMessage({ conversationId: activeConv.id, content });
-    // Local update to messages (SignalR will also broadcast but deduplication is in place)
-    setMessages(prev => [...prev, msg]);
+
+    if (activeConv.type === 0) { // 0 = AI
+      setIsAiTyping(true);
+    }
+
+    try {
+      const msg = await chatService.sendMessage({ conversationId: activeConv.id, content });
+      // Local update to messages (SignalR will also broadcast but deduplication is in place)
+      setMessages(prev => {
+        if (prev.find(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+    } catch (err) {
+      setIsAiTyping(false);
+      throw err;
+    }
   };
 
   const createConversation = async (type: number, msg?: string) => {
@@ -79,6 +97,7 @@ export function useChat() {
     setActiveConv,
     messages,
     loading,
+    isAiTyping,
     sendMessage,
     createConversation,
     deleteConversation

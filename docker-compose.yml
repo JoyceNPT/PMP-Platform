@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: pmp-postgres
+    environment:
+      POSTGRES_DB: PmpDb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "XDev%1902@NPT"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+  redis:
+    image: redis:alpine
+    container_name: pmp-redis
+    ports:
+      - "6379:6379"
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: pmp-mailhog
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # UI
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pmp-backend
+    env_file:
+      - .env
+    ports:
+      - "5259:8080"
+    depends_on:
+      - postgres
+      - redis
+      - mailhog
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+        - VITE_RECAPTCHA_SITE_KEY=${VITE_RECAPTCHA_SITE_KEY}
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
+        - VITE_YOUTUBE_API_KEY=${VITE_YOUTUBE_API_KEY}
+        - VITE_GEMINI_API_KEY=${VITE_GEMINI_API_KEY}
+    container_name: pmp-frontend
+    ports:
+      - "5174:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

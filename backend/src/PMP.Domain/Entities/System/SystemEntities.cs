@@ -76,3 +76,12 @@ public class AuditLog
      *   - Production  : giữ 90 ngày, Hangfire job chạy hàng đêm cleanup
      */
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SYSTEM SETTING  (Cấu hình hệ thống động)
+// ─────────────────────────────────────────────────────────────────────────────
+public class SystemSetting : BaseEntity
+{
+    public string Key { get; set; } = string.Empty;             // unique key (e.g. "NavbarAnnouncement")
+    public string Value { get; set; } = string.Empty;           // value
+}

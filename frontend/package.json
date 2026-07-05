@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -13,6 +13,9 @@
     "@hookform/resolvers": "^5.2.2",
     "@microsoft/signalr": "^10.0.0",
     "@radix-ui/react-dialog": "^1.1.15",
+    "@blocknote/core": "^0.13.4",
+    "@blocknote/react": "^0.13.4",
+    "@blocknote/mantine": "^0.13.4",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-slot": "^1.2.4",

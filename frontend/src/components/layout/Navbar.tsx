@@ -1,3 +1,4 @@
+import React from "react"
 import { Bell, Menu } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -8,6 +9,8 @@ import { ModeToggle } from "@/components/mode-toggle"
 import { LanguageToggle } from "@/components/language-toggle"
 import { Button } from "@/components/ui/button"
 import { CONFIG } from "@/config"
+import { Logo } from "@/components/shared/Logo"
+import apiClient from "@/services/apiClient"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +23,21 @@ import {
 export function Navbar() {
   const { user, logout } = useAuthStore()
   const { t } = useTranslation()
+  const [announcement, setAnnouncement] = React.useState<string>("")
+
+  React.useEffect(() => {
+    const fetchAnnouncement = async () => {
+      try {
+        const res = await apiClient.get('/system/announcement');
+        if (res.data && res.data.succeeded) {
+          setAnnouncement(res.data.data);
+        }
+      } catch (error) {
+        console.error("Failed to load announcement", error);
+      }
+    };
+    fetchAnnouncement();
+  }, []);
 
   // User avatar initials
   const initials = user?.fullName
@@ -33,7 +51,7 @@ export function Navbar() {
     : null;
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 glass bg-background/80 border-b border-border/50 px-4 md:px-8">
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 sm:gap-4 glass bg-background/80 border-b border-border/50 px-3 sm:px-4 md:px-8 overflow-hidden">
       {/* Mobile Sidebar Trigger */}
       <Sheet>
         <SheetTrigger asChild>
@@ -42,26 +60,65 @@ export function Navbar() {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="p-0 w-72">
-          <Sidebar className="w-full h-full border-none shadow-none static" />
+          <Sidebar className="w-full h-full border-none shadow-none static" isMobile={true} />
         </SheetContent>
       </Sheet>
 
       {/* Left: Branding for mobile */}
-      <div className="flex-1">
-         <h2 className="font-black md:hidden gradient-text text-xl">PMP</h2>
+      <div className="flex items-center gap-2 md:hidden">
+         <Logo size={28} />
+         <span className="font-bold text-lg tracking-tighter leading-none bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">PMP</span>
+      </div>
+
+      {/* Center: Running Announcement Ticker */}
+      <div className="flex-1 flex justify-center overflow-hidden">
+        {announcement && (
+          <div className="hidden sm:flex items-center w-full max-w-xs md:max-w-md lg:max-w-lg h-9 px-4 rounded-full bg-primary/5 border border-primary/10 overflow-hidden relative shadow-inner shadow-primary/5">
+            <style>{`
+              @keyframes marquee-ltr {
+                0% { transform: translateX(100%); }
+                100% { transform: translateX(-100%); }
+              }
+              .marquee-container {
+                overflow: hidden;
+                white-space: nowrap;
+                display: flex;
+                align-items: center;
+                width: 100%;
+              }
+              .marquee-text {
+                display: inline-block;
+                animation: marquee-ltr 22s linear infinite;
+                padding-left: 20px;
+              }
+              .marquee-text:hover {
+                animation-play-state: paused;
+              }
+              .mask-gradient {
+                mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+                -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+              }
+            `}</style>
+            <div className="marquee-container w-full mask-gradient">
+              <span className="marquee-text text-xs font-bold text-primary tracking-wide">
+                {announcement}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right: actions */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1 sm:gap-3 shrink-0">
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all">
           <Bell className="h-[1.2rem] w-[1.2rem]" />
           <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-primary border-2 border-background" />
         </Button>
 
-        <div className="h-6 w-px bg-border/50 mx-1 hidden sm:block" />
+        <div className="h-6 w-px bg-border/50 mx-0.5 hidden sm:block" />
 
-        <LanguageToggle />
+        <div className="hidden sm:block"><LanguageToggle /></div>
         <ModeToggle />
 
         {/* User avatar dropdown */}

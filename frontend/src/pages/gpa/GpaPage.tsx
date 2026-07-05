@@ -83,19 +83,19 @@ export function GpaPage() {
     <div className="space-y-6 relative">
       <div className="animate-fade-in-up space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="page-title">Quản lý học tập</h1>
           <p className="page-subtitle">Theo dõi điểm số, tín chỉ và GPA tích lũy của bạn</p>
         </div>
         <button onClick={openConfig}
-          className="flex items-center gap-2 h-9 px-4 rounded-xl border text-sm font-medium hover:bg-muted transition">
+          className="flex items-center gap-2 h-9 px-4 rounded-xl border text-sm font-medium hover:bg-muted transition self-start sm:self-auto">
           <Settings2 className="h-4 w-4" /> Cấu hình
         </button>
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={<GraduationCap className="h-5 w-5" />}
           label="GPA tích lũy"
@@ -158,20 +158,22 @@ export function GpaPage() {
         </div>
 
         {addingYear && (
-          <div className="flex gap-2 items-end p-4 rounded-2xl border border-primary/30 bg-primary/5">
-            <div className="flex-1 space-y-1">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-end p-4 rounded-2xl border border-primary/30 bg-primary/5">
+            <div className="flex-1 space-y-1 w-full">
               <label className="text-xs font-medium text-muted-foreground">Năm học</label>
               <input value={yearName} onChange={e => setYearName(e.target.value)}
                 placeholder="VD: 2023-2024" autoFocus
                 className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
             </div>
-            <div className="w-24 space-y-1">
+            <div className="w-full sm:w-24 space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Năm thứ</label>
               <input type="number" min={1} max={10} value={yearOrder} onChange={e => setYearOrder(parseInt(e.target.value) || 1)}
                 className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
             </div>
-            <button onClick={handleAddYear} className="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition">Tạo</button>
-            <button onClick={() => setAddingYear(false)} className="h-9 px-3 rounded-lg bg-muted text-sm hover:bg-muted/70 transition">Huỷ</button>
+            <div className="flex gap-2 w-full sm:w-auto justify-end mt-2 sm:mt-0">
+              <button onClick={handleAddYear} className="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition flex-1 sm:flex-initial text-center justify-center">Tạo</button>
+              <button onClick={() => setAddingYear(false)} className="h-9 px-3 rounded-lg bg-muted text-sm hover:bg-muted/70 transition flex-1 sm:flex-initial text-center justify-center">Huỷ</button>
+            </div>
           </div>
         )}
 

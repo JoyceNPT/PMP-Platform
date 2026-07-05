@@ -140,8 +140,13 @@ public class RoadmapService : IRoadmapService
                 - Goal: Become a {req.CareerPath} at {targetLevelStr} level.
 
                 The roadmap should be a list of steps (nodes) to achieve this goal.
-                Each step must include a unique key, title, brief description, a category (e.g., Fundamentals, Advanced, Tools), and an order index.
-                Also specify prerequisite keys if a step depends on another.
+                Each step must include a unique key, title, brief explanation (desc), a category (cat), and an order index (order).
+                Also specify prerequisite keys (pre) if a step depends on another.
+
+                IMPORTANT: The category (cat) MUST be exactly one of these three values:
+                1. ""Basic"": Core language syntax/rules (e.g. C# if the path is .NET), OOP principles, basic Frontend (HTML/CSS/JS), or basic Backend concepts.
+                2. ""Advanced"": Database (SQL/NoSQL), Web development (APIs, MVC), Git, and Docker.
+                3. ""Master"": DevOps, CI/CD, testing, cloud deployment, and advanced architecture.
 
                 Return ONLY a JSON array of objects with this schema:
                 [
@@ -149,7 +154,7 @@ public class RoadmapService : IRoadmapService
                     ""key"": ""unique_id_string"",
                     ""title"": ""Step Title"",
                     ""desc"": ""Brief explanation"",
-                    ""cat"": ""Category Name"",
+                    ""cat"": ""Basic"" | ""Advanced"" | ""Master"",
                     ""order"": 1,
                     ""pre"": [""prerequisite_key1""]
                   }}
@@ -177,17 +182,47 @@ public class RoadmapService : IRoadmapService
             _db.CareerRoadmaps.Add(roadmap);
             await _db.SaveChangesAsync();
 
-            // 3. Create nodes with better positioning
-            var nodeEntities = mockNodes.Select((n, idx) => new RoadmapNode
-            {
-                RoadmapId = roadmap.Id,
-                NodeKey = n.Key,
-                Title = n.Title,
-                Description = n.Desc,
-                Category = n.Cat,
-                OrderIndex = n.Order,
-                PositionX = (idx % 3) * 300 + 100,
-                PositionY = (idx / 3) * 200 + 100
+            // 3. Create nodes with structured positioning based on Basic, Advanced, Master columns
+            var basicCount = 0;
+            var advancedCount = 0;
+            var masterCount = 0;
+
+            var nodeEntities = mockNodes.Select(n => {
+                var catNormalized = n.Cat?.Trim() ?? "Basic";
+                if (catNormalized.Contains("basic", StringComparison.OrdinalIgnoreCase)) catNormalized = "Basic";
+                else if (catNormalized.Contains("advanced", StringComparison.OrdinalIgnoreCase) || catNormalized.Contains("advented", StringComparison.OrdinalIgnoreCase)) catNormalized = "Advanced";
+                else if (catNormalized.Contains("master", StringComparison.OrdinalIgnoreCase) || catNormalized.Contains("expert", StringComparison.OrdinalIgnoreCase)) catNormalized = "Master";
+                else catNormalized = "Basic"; // fallback
+
+                decimal posX = 100;
+                decimal posY = 100;
+
+                if (catNormalized == "Basic") {
+                    posX = 100;
+                    posY = basicCount * 180 + 100;
+                    basicCount++;
+                } else if (catNormalized == "Advanced") {
+                    posX = 450;
+                    posY = advancedCount * 180 + 100;
+                    advancedCount++;
+                } else { // Master
+                    posX = 800;
+                    posY = masterCount * 180 + 100;
+                    masterCount++;
+                }
+
+                return new RoadmapNode
+                {
+                    RoadmapId = roadmap.Id,
+                    NodeKey = n.Key,
+                    Title = n.Title,
+                    Description = n.Desc,
+                    Category = catNormalized,
+                    OrderIndex = n.Order,
+                    PositionX = posX,
+                    PositionY = posY,
+                    IsCustom = false
+                };
             }).ToList();
 
             _db.RoadmapNodes.AddRange(nodeEntities);
@@ -287,6 +322,197 @@ public class RoadmapService : IRoadmapService
         return new ApiResponse<bool>(true, "Cập nhật tiến độ thành công.");
     }
 
+    public async Task<ApiResponse<RoadmapNodeDto>> AddCustomNodeAsync(Guid userId, AddCustomNodeRequest request)
+    {
+        try
+        {
+            var roadmap = await _db.CareerRoadmaps.FirstOrDefaultAsync(r => r.UserId == userId && r.IsActive);
+            if (roadmap == null) return new ApiResponse<RoadmapNodeDto>("Không tìm thấy lộ trình đang hoạt động.");
+
+            var catNormalized = request.Category?.Trim() ?? "Basic";
+            if (catNormalized.Contains("basic", StringComparison.OrdinalIgnoreCase)) catNormalized = "Basic";
+            else if (catNormalized.Contains("advanced", StringComparison.OrdinalIgnoreCase) || catNormalized.Contains("advented", StringComparison.OrdinalIgnoreCase)) catNormalized = "Advanced";
+            else if (catNormalized.Contains("master", StringComparison.OrdinalIgnoreCase) || catNormalized.Contains("expert", StringComparison.OrdinalIgnoreCase)) catNormalized = "Master";
+            else catNormalized = "Basic";
+
+            // Tự động tính tọa độ Y ở dưới cùng của cột tương ứng
+            var maxY = await _db.RoadmapNodes
+                .Where(n => n.RoadmapId == roadmap.Id && n.Category == catNormalized)
+                .Select(n => (decimal?)n.PositionY)
+                .MaxAsync() ?? 0;
+
+            decimal posX = catNormalized switch
+            {
+                "Basic" => 100,
+                "Advanced" => 450,
+                "Master" => 800,
+                _ => 100
+            };
+
+            var maxOrder = await _db.RoadmapNodes
+                .Where(n => n.RoadmapId == roadmap.Id)
+                .Select(n => (int?)n.OrderIndex)
+                .MaxAsync() ?? 0;
+
+            var nodeKey = "custom_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+
+            var node = new RoadmapNode
+            {
+                RoadmapId = roadmap.Id,
+                NodeKey = nodeKey,
+                Title = request.Title,
+                Description = request.Description,
+                Category = catNormalized,
+                OrderIndex = maxOrder + 1,
+                PositionX = posX,
+                PositionY = maxY + 180,
+                IsCustom = true
+            };
+
+            _db.RoadmapNodes.Add(node);
+            await _db.SaveChangesAsync();
+
+            // Thêm các node tiền đề (prerequisites)
+            if (request.PrerequisiteNodeIds != null && request.PrerequisiteNodeIds.Any())
+            {
+                foreach (var preId in request.PrerequisiteNodeIds)
+                {
+                    var preNode = await _db.RoadmapNodes.FirstOrDefaultAsync(n => n.Id == preId && n.RoadmapId == roadmap.Id);
+                    if (preNode != null)
+                    {
+                        _db.RoadmapNodePrerequisites.Add(new RoadmapNodePrerequisite
+                        {
+                            NodeId = node.Id,
+                            PrerequisiteNodeId = preNode.Id
+                        });
+                    }
+                }
+                await _db.SaveChangesAsync();
+            }
+
+            // Reload node với UserProgress và Prerequisites để map đúng
+            var savedNode = await _db.RoadmapNodes
+                .Include(n => n.Prerequisites).ThenInclude(p => p.PrerequisiteNode)
+                .Include(n => n.UserProgress)
+                .FirstAsync(n => n.Id == node.Id);
+
+            return new ApiResponse<RoadmapNodeDto>(MapNode(savedNode, userId), "Thêm kỹ năng tự chọn thành công.");
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<RoadmapNodeDto>($"Lỗi khi thêm kỹ năng tự chọn: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<bool>> DeleteCustomNodeAsync(Guid userId, Guid nodeId)
+    {
+        try
+        {
+            var node = await _db.RoadmapNodes
+                .Include(n => n.Roadmap)
+                .Include(n => n.Prerequisites)
+                .Include(n => n.RequiredBy)
+                .Include(n => n.UserProgress)
+                .FirstOrDefaultAsync(n => n.Id == nodeId);
+
+            if (node == null) return new ApiResponse<bool>("Không tìm thấy kỹ năng.");
+            if (node.Roadmap.UserId != userId) return new ApiResponse<bool>("Bạn không có quyền xóa kỹ năng này.");
+            if (!node.IsCustom) return new ApiResponse<bool>("Không thể xóa kỹ năng do AI đề xuất.");
+
+            // Manually delete prerequisites (both direction)
+            _db.RoadmapNodePrerequisites.RemoveRange(node.Prerequisites);
+            _db.RoadmapNodePrerequisites.RemoveRange(node.RequiredBy);
+            _db.UserNodeProgress.RemoveRange(node.UserProgress);
+            
+            _db.RoadmapNodes.Remove(node);
+            await _db.SaveChangesAsync();
+
+            return new ApiResponse<bool>(true, "Đã xóa kỹ năng tự chọn thành công.");
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool>($"Lỗi khi xóa kỹ năng tự chọn: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<RoadmapNodeDto>> UpdateCustomNodeAsync(Guid userId, Guid nodeId, UpdateCustomNodeRequest request)
+    {
+        try
+        {
+            var node = await _db.RoadmapNodes
+                .Include(n => n.Roadmap)
+                .Include(n => n.Prerequisites)
+                .Include(n => n.UserProgress)
+                .FirstOrDefaultAsync(n => n.Id == nodeId);
+
+            if (node == null) return new ApiResponse<RoadmapNodeDto>("Không tìm thấy kỹ năng.");
+            if (node.Roadmap.UserId != userId) return new ApiResponse<RoadmapNodeDto>("Bạn không có quyền chỉnh sửa kỹ năng này.");
+            if (!node.IsCustom) return new ApiResponse<RoadmapNodeDto>("Không thể chỉnh sửa kỹ năng do AI đề xuất.");
+
+            node.Title = request.Title;
+            node.Description = request.Description;
+
+            var catNormalized = request.Category?.Trim() ?? "Basic";
+            if (catNormalized.Contains("basic", StringComparison.OrdinalIgnoreCase)) catNormalized = "Basic";
+            else if (catNormalized.Contains("advanced", StringComparison.OrdinalIgnoreCase) || catNormalized.Contains("advented", StringComparison.OrdinalIgnoreCase)) catNormalized = "Advanced";
+            else if (catNormalized.Contains("master", StringComparison.OrdinalIgnoreCase) || catNormalized.Contains("expert", StringComparison.OrdinalIgnoreCase)) catNormalized = "Master";
+            else catNormalized = "Basic";
+
+            // Nếu thay đổi category thì tính lại vị trí X và Y ở cuối cột mới
+            if (node.Category != catNormalized)
+            {
+                node.Category = catNormalized;
+                var maxY = await _db.RoadmapNodes
+                    .Where(n => n.RoadmapId == node.RoadmapId && n.Category == catNormalized && n.Id != node.Id)
+                    .Select(n => (decimal?)n.PositionY)
+                    .MaxAsync() ?? 0;
+
+                node.PositionX = catNormalized switch
+                {
+                    "Basic" => 100,
+                    "Advanced" => 450,
+                    "Master" => 800,
+                    _ => 100
+                };
+                node.PositionY = maxY + 180;
+            }
+
+            // Cập nhật prerequisites
+            _db.RoadmapNodePrerequisites.RemoveRange(node.Prerequisites);
+            await _db.SaveChangesAsync();
+
+            if (request.PrerequisiteNodeIds != null && request.PrerequisiteNodeIds.Any())
+            {
+                foreach (var preId in request.PrerequisiteNodeIds)
+                {
+                    var preNode = await _db.RoadmapNodes.FirstOrDefaultAsync(n => n.Id == preId && n.RoadmapId == node.RoadmapId);
+                    if (preNode != null && preNode.Id != node.Id)
+                    {
+                        _db.RoadmapNodePrerequisites.Add(new RoadmapNodePrerequisite
+                        {
+                            NodeId = node.Id,
+                            PrerequisiteNodeId = preNode.Id
+                        });
+                    }
+                }
+                await _db.SaveChangesAsync();
+            }
+
+            await _db.SaveChangesAsync();
+
+            var savedNode = await _db.RoadmapNodes
+                .Include(n => n.Prerequisites).ThenInclude(p => p.PrerequisiteNode)
+                .Include(n => n.UserProgress)
+                .FirstAsync(n => n.Id == node.Id);
+
+            return new ApiResponse<RoadmapNodeDto>(MapNode(savedNode, userId), "Cập nhật kỹ năng tự chọn thành công.");
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<RoadmapNodeDto>($"Lỗi khi cập nhật kỹ năng tự chọn: {ex.Message}");
+        }
+    }
+
     // ─── Mapping ─────────────────────────────────────────────────────────────
 
     private UserCareerProfileDto MapProfile(UserCareerProfile p) => new()
@@ -332,7 +558,8 @@ public class RoadmapService : IRoadmapService
             Status = progress != null ? (int)progress.Status : 0,
             Note = progress?.Note,
             CertificateUrl = progress?.CertificateUrl,
-            PrerequisiteKeys = n.Prerequisites.Select(p => p.PrerequisiteNode.NodeKey).ToList()
+            PrerequisiteKeys = n.Prerequisites.Select(p => p.PrerequisiteNode.NodeKey).ToList(),
+            IsCustom = n.IsCustom
         };
     }
 
@@ -341,16 +568,16 @@ public class RoadmapService : IRoadmapService
         // Simple but high-quality fallback based on the goal
         var nodes = new List<RoadmapNodeTemplate>
         {
-            new() { Key = "f1", Title = $"Nền tảng {profile.Major}", Desc = "Ôn tập các kiến thức cốt lõi và tư duy căn bản.", Cat = "Nền tảng", Order = 1 },
-            new() { Key = "f2", Title = "Kỹ năng chuyên môn", Desc = $"Nghiệp vụ cần thiết cho vị trí {req.CareerPath}.", Cat = "Chuyên môn", Order = 2, Pre = ["f1"] },
-            new() { Key = "f3", Title = "Công cụ & Quy trình", Desc = "Làm quen với các phần mềm và phương pháp làm việc thực tế.", Cat = "Công cụ", Order = 3, Pre = ["f2"] },
-            new() { Key = "f4", Title = "Dự án thực tế", Desc = "Xây dựng portfolio và áp dụng kiến thức vào bài toán thực tế.", Cat = "Thực hành", Order = 4, Pre = ["f3"] },
-            new() { Key = "f5", Title = "Nâng cao & Mở rộng", Desc = $"Hoàn thiện kỹ năng để đạt mức {req.TargetLevel}.", Cat = "Nâng cao", Order = 5, Pre = ["f4"] }
+            new() { Key = "f1", Title = $"Nền tảng {profile.Major}", Desc = "Ôn tập các kiến thức cốt lõi và tư duy căn bản.", Cat = "Basic", Order = 1 },
+            new() { Key = "f2", Title = "Kỹ năng chuyên môn", Desc = $"Nghiệp vụ cần thiết cho vị trí {req.CareerPath}.", Cat = "Basic", Order = 2, Pre = ["f1"] },
+            new() { Key = "f3", Title = "Công cụ & Quy trình", Desc = "Làm quen với các phần mềm và phương pháp làm việc thực tế.", Cat = "Advanced", Order = 3, Pre = ["f2"] },
+            new() { Key = "f4", Title = "Dự án thực tế", Desc = "Xây dựng portfolio và áp dụng kiến thức vào bài toán thực tế.", Cat = "Advanced", Order = 4, Pre = ["f3"] },
+            new() { Key = "f5", Title = "Nâng cao & Mở rộng", Desc = $"Hoàn thiện kỹ năng để đạt mức {req.TargetLevel}.", Cat = "Master", Order = 5, Pre = ["f4"] }
         };
 
         if (req.TargetLevel >= 2) // Advanced
         {
-            nodes.Add(new() { Key = "f6", Title = "Tối ưu hóa & Kiến trúc", Desc = "Nâng cao hiệu suất và tư duy hệ thống quy mô lớn.", Cat = "Expert", Order = 6, Pre = ["f5"] });
+            nodes.Add(new() { Key = "f6", Title = "Tối ưu hóa & Kiến trúc", Desc = "Nâng cao hiệu suất và tư duy hệ thống quy mô lớn.", Cat = "Master", Order = 6, Pre = ["f5"] });
         }
 
         return nodes;

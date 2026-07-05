@@ -17,6 +17,9 @@ public interface IRoadmapService
     Task<ApiResponse<CareerRoadmapDto>> GetActiveRoadmapAsync(Guid userId);
     Task<ApiResponse<CareerRoadmapDto>> GenerateAiRoadmapAsync(Guid userId, GenerateRoadmapRequest request);
     Task<ApiResponse<bool>> DeleteRoadmapAsync(Guid userId, Guid roadmapId);
+    Task<ApiResponse<RoadmapNodeDto>> AddCustomNodeAsync(Guid userId, AddCustomNodeRequest request);
+    Task<ApiResponse<bool>> DeleteCustomNodeAsync(Guid userId, Guid nodeId);
+    Task<ApiResponse<RoadmapNodeDto>> UpdateCustomNodeAsync(Guid userId, Guid nodeId, UpdateCustomNodeRequest request);
 
     // Progress
     Task<ApiResponse<bool>> UpdateNodeProgressAsync(Guid userId, UpdateNodeProgressRequest request);

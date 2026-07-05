@@ -94,9 +94,20 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IAiChatService, AiChatService>();
 builder.Services.AddScoped<IAiService, GeminiService>();
+builder.Services.AddScoped<PMP.Application.Features.Note.Interfaces.INoteService, PMP.Infrastructure.Services.Note.NoteService>();
+builder.Services.AddScoped<ISystemSettingService, SystemSettingService>();
+builder.Services.AddScoped<CloudinaryStorageService>();
+builder.Services.AddScoped<S3StorageService>();
+builder.Services.AddScoped<IStorageService, StorageServiceFactory>();
 builder.Services.AddHttpClient();
 
 // JWT Authentication
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? Environment.GetEnvironmentVariable("Jwt__Key")
+    ?? "SuperSecretKeyForDevelopmentOnlyShouldBeChangedInProductionAndStoredInSecretManager";
+var jwtIssuer  = builder.Configuration["Jwt:Issuer"]  ?? "PmpAPI";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "PmpClient";
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -111,10 +122,23 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+            Encoding.UTF8.GetBytes(jwtKey))
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
     };
 });
 

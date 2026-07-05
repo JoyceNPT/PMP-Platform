@@ -1,5 +1,6 @@
 import apiClient from '@/services/apiClient';
 import * as signalR from '@microsoft/signalr';
+import { CONFIG } from '@/config';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,17 +49,28 @@ export const chatService = {
 // ─── SignalR Helper ───────────────────────────────────────────────────────────
 
 let hubConnection: signalR.HubConnection | null = null;
+let currentJoinedConversationId: string | null = null;
 
 export const chatHub = {
   start: async (token: string, onMessageReceived: (msg: Message) => void) => {
     if (hubConnection) {
       hubConnection.off('ReceiveMessage');
       hubConnection.on('ReceiveMessage', onMessageReceived);
+      if (hubConnection.state === signalR.HubConnectionState.Connected && currentJoinedConversationId) {
+        try {
+          await hubConnection.invoke('JoinConversation', currentJoinedConversationId);
+        } catch (e) {
+          console.error('Error invoking JoinConversation on start:', e);
+        }
+      }
       return;
     }
 
+    const baseUrl = CONFIG.API_BASE_URL.replace(/\/api$/, '');
+    const hubUrl = `${baseUrl}/hubs/chat`;
+
     hubConnection = new signalR.HubConnectionBuilder()
-      .withUrl('/hubs/chat', {
+      .withUrl(hubUrl, {
         accessTokenFactory: () => token
       })
       .withAutomaticReconnect()
@@ -71,6 +83,9 @@ export const chatHub = {
     try {
       await hubConnection.start();
       console.log('SignalR Connected.');
+      if (currentJoinedConversationId) {
+        await hubConnection.invoke('JoinConversation', currentJoinedConversationId);
+      }
     } catch (err) {
       console.error('SignalR Connection Error: ', err);
     }
@@ -82,11 +97,15 @@ export const chatHub = {
     }
   },
   joinConversation: async (id: string) => {
+    currentJoinedConversationId = id;
     if (hubConnection?.state === signalR.HubConnectionState.Connected) {
       await hubConnection.invoke('JoinConversation', id);
     }
   },
   leaveConversation: async (id: string) => {
+    if (currentJoinedConversationId === id) {
+      currentJoinedConversationId = null;
+    }
     if (hubConnection?.state === signalR.HubConnectionState.Connected) {
       await hubConnection.invoke('LeaveConversation', id);
     }

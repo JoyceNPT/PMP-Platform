@@ -67,6 +67,7 @@ public class RoadmapNode : BaseEntity
     public int OrderIndex { get; set; }                         // thứ tự hiển thị
     public decimal? PositionX { get; set; }                     // toạ độ render graph
     public decimal? PositionY { get; set; }
+    public bool IsCustom { get; set; } = false;                 // đánh dấu kỹ năng người dùng tự thêm
 
     // ── Navigation ───────────────────────────────────────────────────────────
     public CareerRoadmap Roadmap { get; set; } = null!;

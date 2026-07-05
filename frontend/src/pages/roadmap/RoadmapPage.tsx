@@ -25,9 +25,10 @@ import {
   Trash2,
   X,
   ExternalLink,
-  Award,
   Briefcase,
-  BookOpen
+  BookOpen,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { useCareerProfile, useActiveRoadmap } from '@/features/roadmap/components/useRoadmap';
 import { roadmapService, type RoadmapNode } from '@/services/roadmap/roadmapService';
@@ -46,7 +47,7 @@ const RoadmapNodeComponent = ({ data }: { data: any }) => {
   return (
     <div 
       onClick={() => data.onClick(data.rawNode)}
-      className={`px-4 py-4 rounded-2xl border-2 shadow-xl w-[240px] h-[120px] bg-card cursor-pointer hover:scale-[1.02] active:scale-95 transition-all duration-300 flex flex-col justify-between ${statusColors[data.status]}`}
+      className={`relative px-4 py-4 rounded-2xl border-2 shadow-xl w-[240px] h-[120px] bg-card cursor-pointer hover:scale-[1.02] active:scale-95 transition-all duration-300 flex flex-col justify-between ${statusColors[data.status]}`}
     >
       <div>
         <div className="flex items-center gap-2 mb-2">
@@ -55,8 +56,14 @@ const RoadmapNodeComponent = ({ data }: { data: any }) => {
           </div>
           <span className="text-[10px] font-black uppercase tracking-[0.15em] opacity-60">{data.category || 'Skill'}</span>
         </div>
-        <h4 className="font-bold text-sm leading-tight text-foreground line-clamp-2">{data.label}</h4>
+        <h4 className="font-bold text-sm leading-tight text-foreground line-clamp-2 pr-10">{data.label}</h4>
       </div>
+
+      {data.isCustom && (
+        <span className="absolute top-3 right-3 px-1.5 py-0.5 rounded-md text-[8px] font-black bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase tracking-wider">
+          Tự chọn
+        </span>
+      )}
       
       <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
         <span className="text-[9px] font-bold opacity-40 uppercase">Bấm để xem chi tiết</span>
@@ -73,7 +80,18 @@ const RoadmapNodeComponent = ({ data }: { data: any }) => {
   );
 };
 
-const nodeTypes = { roadmapNode: RoadmapNodeComponent };
+const RoadmapHeaderComponent = ({ data }: { data: any }) => {
+  return (
+    <div className="w-[240px] text-center py-3 bg-muted/60 dark:bg-muted/20 border-b-4 border-primary/40 rounded-t-2xl shadow-sm">
+      <h3 className="font-extrabold text-xs uppercase tracking-[0.2em] text-primary">{data.label}</h3>
+    </div>
+  );
+};
+
+const nodeTypes = { 
+  roadmapNode: RoadmapNodeComponent,
+  roadmapHeader: RoadmapHeaderComponent
+};
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function RoadmapPage() {
@@ -83,6 +101,8 @@ export function RoadmapPage() {
   const [careerPath, setCareerPath] = useState('');
   const [targetLevel, setTargetLevel] = useState(1); // Default Intermediate
   const [generating, setGenerating] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [triggerGenerateAfterProfileSave, setTriggerGenerateAfterProfileSave] = useState(false);
 
   // Modals state
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -93,6 +113,19 @@ export function RoadmapPage() {
   const [editNote, setEditNote] = useState('');
   const [editStatus, setEditStatus] = useState<number>(0);
   const [newSkillName, setNewSkillName] = useState('');
+
+  // Custom Node Edit states (inside node detail modal)
+  const [editNodeTitle, setEditNodeTitle] = useState('');
+  const [editNodeDesc, setEditNodeDesc] = useState('');
+  const [editNodeCategory, setEditNodeCategory] = useState('Basic');
+  const [editNodePrereqs, setEditNodePrereqs] = useState<string[]>([]);
+
+  // Custom Node Add modal state
+  const [showAddCustomNodeModal, setShowAddCustomNodeModal] = useState(false);
+  const [customTitle, setCustomTitle] = useState('');
+  const [customDesc, setCustomDesc] = useState('');
+  const [customCategory, setCustomCategory] = useState('Basic');
+  const [customPrereqs, setCustomPrereqs] = useState<string[]>([]);
 
   // Profile Edit state
   const [editMajor, setEditMajor] = useState('');
@@ -113,7 +146,36 @@ export function RoadmapPage() {
 
   useEffect(() => {
     if (roadmap) {
-      const flowNodes: Node[] = roadmap.nodes.map((n) => ({
+      // 1. Create Stage Headers
+      const flowNodes: Node[] = [
+        {
+          id: 'h-basic',
+          type: 'roadmapHeader',
+          position: { x: 100, y: 10 },
+          data: { label: 'Giai đoạn 1: Basic' },
+          draggable: false,
+          selectable: false,
+        },
+        {
+          id: 'h-advanced',
+          type: 'roadmapHeader',
+          position: { x: 450, y: 10 },
+          data: { label: 'Giai đoạn 2: Advanced' },
+          draggable: false,
+          selectable: false,
+        },
+        {
+          id: 'h-master',
+          type: 'roadmapHeader',
+          position: { x: 800, y: 10 },
+          data: { label: 'Giai đoạn 3: Master' },
+          draggable: false,
+          selectable: false,
+        }
+      ];
+
+      // 2. Map actual nodes
+      const roadmapFlowNodes: Node[] = roadmap.nodes.map((n) => ({
         id: n.id,
         type: 'roadmapNode',
         position: { x: n.positionX || 0, y: n.positionY || 0 },
@@ -124,6 +186,7 @@ export function RoadmapPage() {
           category: n.category,
           status: n.status,
           certificateUrl: n.certificateUrl,
+          isCustom: n.isCustom,
           rawNode: n,
           onStatusChange: handleStatusChange,
           onClick: (node: RoadmapNode) => {
@@ -131,10 +194,23 @@ export function RoadmapPage() {
              setEditStatus(node.status);
              setCertUrl(node.certificateUrl || '');
              setEditNote(node.note || '');
+             // Load custom node edit states
+             setEditNodeTitle(node.title);
+             setEditNodeDesc(node.description || '');
+             setEditNodeCategory(node.category || 'Basic');
+             
+             // Map prerequisite keys (strings) back to Guid IDs
+             const preIds = (node.prerequisiteKeys || [])
+               .map(key => roadmap.nodes.find(rn => rn.nodeKey === key)?.id)
+               .filter((id): id is string => !!id);
+             setEditNodePrereqs(preIds);
           }
         }
       }));
 
+      flowNodes.push(...roadmapFlowNodes);
+
+      // 3. Map edges
       const flowEdges: Edge[] = [];
       roadmap.nodes.forEach(n => {
         n.prerequisiteKeys.forEach(preKey => {
@@ -163,16 +239,17 @@ export function RoadmapPage() {
   };
 
   const handleGenerate = async () => {
-    console.log("handleGenerate triggered", { careerPath, targetLevel });
     if (!careerPath.trim()) {
       toast.error("Vui lòng nhập vị trí công việc mơ ước.");
       return;
     }
-    if (!profile || !profile.major) {
+    if (!profile || !profile.major || profile.major === "Chưa cập nhật") {
       toast.error("Vui lòng cập nhật Hồ sơ năng lực (Chuyên ngành) trước khi tạo lộ trình.");
+      setTriggerGenerateAfterProfileSave(true);
       setShowProfileModal(true);
       return;
     }
+    setGenerating(true);
     const loadingToast = toast.loading("AI đang nghiên cứu và tạo lộ trình cho bạn...");
     try {
       await roadmapService.generateAiRoadmap(careerPath.trim(), targetLevel);
@@ -194,9 +271,40 @@ export function RoadmapPage() {
   };
 
   const handleUpdateProfile = async () => {
-    await roadmapService.updateProfile({ major: editMajor, currentJob: editJob, experienceYears: editExp });
-    refreshProfile();
-    setShowProfileModal(false);
+    if (!editMajor.trim()) {
+      toast.error("Vui lòng nhập chuyên ngành.");
+      return;
+    }
+    const loadingToast = toast.loading("Đang lưu hồ sơ...");
+    try {
+      await roadmapService.updateProfile({ 
+        major: editMajor.trim(), 
+        currentJob: editJob.trim(), 
+        experienceYears: editExp 
+      });
+      toast.success("Cập nhật hồ sơ thành công!", { id: loadingToast });
+      
+      await refreshProfile();
+      setShowProfileModal(false);
+
+      if (triggerGenerateAfterProfileSave) {
+        setTriggerGenerateAfterProfileSave(false);
+        setGenerating(true);
+        const genToast = toast.loading("AI đang nghiên cứu và tạo lộ trình cho bạn...");
+        try {
+          await roadmapService.generateAiRoadmap(careerPath.trim(), targetLevel);
+          await refreshRoadmap();
+          toast.success("Lộ trình đã sẵn sàng!", { id: genToast });
+        } catch (err: any) {
+          toast.error(err.response?.data?.message || "Không thể tạo lộ trình. Vui lòng thử lại sau.", { id: genToast });
+        } finally {
+          setGenerating(false);
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Không thể lưu hồ sơ. Vui lòng kiểm tra lại.", { id: loadingToast });
+    }
   };
 
   const handleAddSkill = async () => {
@@ -220,16 +328,75 @@ export function RoadmapPage() {
       return;
     }
 
-    await roadmapService.updateProgress({ 
-      nodeId: selectedNode.id, 
-      status: editStatus,
-      certificateUrl: certUrl,
-      note: editNote 
-    });
-    setCertUrl('');
-    setEditNote('');
-    setSelectedNode(null);
-    refreshRoadmap();
+    const loadingToast = toast.loading("Đang lưu tiến trình...");
+    try {
+      // 1. If it's a custom node, save title, description, category, prerequisites updates
+      if (selectedNode.isCustom) {
+        if (!editNodeTitle.trim()) {
+          toast.error("Tên kỹ năng không được để trống.", { id: loadingToast });
+          return;
+        }
+        await roadmapService.updateCustomNode(selectedNode.id, {
+          title: editNodeTitle.trim(),
+          description: editNodeDesc.trim(),
+          category: editNodeCategory,
+          prerequisiteNodeIds: editNodePrereqs
+        });
+      }
+
+      // 2. Save progress update
+      await roadmapService.updateProgress({ 
+        nodeId: selectedNode.id, 
+        status: editStatus,
+        certificateUrl: certUrl,
+        note: editNote 
+      });
+
+      setCertUrl('');
+      setEditNote('');
+      setSelectedNode(null);
+      refreshRoadmap();
+      toast.success("Đã cập nhật thành công!", { id: loadingToast });
+    } catch (err: any) {
+      toast.error("Không thể lưu tiến trình.", { id: loadingToast });
+    }
+  };
+
+  const handleAddCustomNode = async () => {
+    if (!customTitle.trim()) {
+      toast.error("Vui lòng nhập tên kỹ năng.");
+      return;
+    }
+    const loadingToast = toast.loading("Đang thêm kỹ năng tự chọn...");
+    try {
+      await roadmapService.addCustomNode({
+        title: customTitle.trim(),
+        description: customDesc.trim(),
+        category: customCategory,
+        prerequisiteNodeIds: customPrereqs
+      });
+      toast.success("Đã thêm kỹ năng tự chọn thành công!", { id: loadingToast });
+      setCustomTitle('');
+      setCustomDesc('');
+      setCustomPrereqs([]);
+      setShowAddCustomNodeModal(false);
+      refreshRoadmap();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Không thể thêm kỹ năng.", { id: loadingToast });
+    }
+  };
+
+  const handleDeleteCustomNode = async () => {
+    if (!selectedNode) return;
+    const loadingToast = toast.loading("Đang xóa kỹ năng tự chọn...");
+    try {
+      await roadmapService.deleteCustomNode(selectedNode.id);
+      toast.success("Đã xóa kỹ năng tự chọn!", { id: loadingToast });
+      setSelectedNode(null);
+      refreshRoadmap();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Không thể xóa kỹ năng.", { id: loadingToast });
+    }
   };
 
   if (loadRoadmap) {
@@ -248,9 +415,21 @@ export function RoadmapPage() {
         </div>
         <div className="flex gap-2">
           {roadmap && (
-            <button onClick={() => setShowDeleteModal(true)} className="h-9 px-3 rounded-xl border text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition">
-              <Trash2 className="h-4 w-4" />
-            </button>
+            <>
+              <button 
+                onClick={() => {
+                  setCustomCategory('Basic');
+                  setCustomPrereqs([]);
+                  setShowAddCustomNodeModal(true);
+                }}
+                className="flex items-center gap-2 h-9 px-4 rounded-xl bg-amber-500/10 text-amber-600 text-sm font-bold hover:bg-amber-500/20 transition border border-amber-500/20"
+              >
+                <Plus className="h-4 w-4" /> Thêm kỹ năng tự chọn
+              </button>
+              <button onClick={() => setShowDeleteModal(true)} className="h-9 px-3 rounded-xl border text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
           )}
           <button 
             onClick={() => setShowProfileModal(true)}
@@ -309,7 +488,7 @@ export function RoadmapPage() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 bg-card rounded-3xl border shadow-inner relative overflow-hidden group">
+        <div className={isFullscreen ? "fixed inset-0 z-50 bg-background flex flex-col p-6 animate-fade-in" : "flex-1 bg-card rounded-3xl border shadow-inner relative overflow-hidden group"}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -332,6 +511,17 @@ export function RoadmapPage() {
                 </div>
               </div>
             </Panel>
+            
+            <Panel position="top-right" className="m-4">
+              <button 
+                onClick={() => setIsFullscreen(!isFullscreen)} 
+                className="flex items-center justify-center h-10 w-10 rounded-xl bg-card border shadow-lg text-foreground hover:bg-muted transition"
+                title={isFullscreen ? "Thu nhỏ" : "Toàn màn hình"}
+              >
+                {isFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+              </button>
+            </Panel>
+
             <Panel position="bottom-right" className="bg-card/80 backdrop-blur border p-3 rounded-2xl shadow-sm m-4 flex gap-4 text-[10px] font-bold">
               <div className="flex items-center gap-1.5"><Circle className="h-3 w-3" /> CHƯA HỌC</div>
               <div className="flex items-center gap-1.5 text-blue-500"><Clock className="h-3 w-3" /> ĐANG HỌC</div>
@@ -341,8 +531,8 @@ export function RoadmapPage() {
         </div>
       )}
 
-      {/* ── Profile Summary (Clickable) ── */}
-      {profile && (
+      {/* ── Profile Summary ── */}
+      {profile && !isFullscreen && (
         <div className="grid grid-cols-4 gap-4 shrink-0">
           <button 
             onClick={() => setShowProfileModal(true)}
@@ -405,7 +595,6 @@ export function RoadmapPage() {
             </div>
             
             <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-              {/* Profile Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-muted-foreground uppercase ml-1">Chuyên ngành</label>
@@ -456,7 +645,7 @@ export function RoadmapPage() {
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase text-muted-foreground">{selectedNode.category || 'Skill'}</p>
-                  <h3 className="text-lg font-bold">{selectedNode.title}</h3>
+                  <h3 className="text-lg font-bold">{selectedNode.isCustom ? "Chỉnh sửa kỹ năng" : selectedNode.title}</h3>
                 </div>
               </div>
               <button onClick={() => setSelectedNode(null)} className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center transition">
@@ -464,13 +653,74 @@ export function RoadmapPage() {
               </button>
             </div>
             
-            <div className="p-6 space-y-6">
-              <div className="space-y-2">
-                <p className="text-xs font-bold text-muted-foreground uppercase">Mô tả</p>
-                <p className="text-sm leading-relaxed">{selectedNode.description || 'Chưa có mô tả chi tiết cho kỹ năng này.'}</p>
-              </div>
+            <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+              
+              {/* If it's a Custom Node, show editable inputs */}
+              {selectedNode.isCustom ? (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase ml-1">Tên kỹ năng</label>
+                    <input 
+                      value={editNodeTitle}
+                      onChange={e => setEditNodeTitle(e.target.value)}
+                      placeholder="Nhập tên kỹ năng..."
+                      className="w-full h-11 px-4 rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
 
-              <div className="space-y-4 pt-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase ml-1">Mô tả chi tiết</label>
+                    <textarea 
+                      value={editNodeDesc}
+                      onChange={e => setEditNodeDesc(e.target.value)}
+                      placeholder="Mô tả kỹ năng..."
+                      className="w-full h-20 p-3 rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm resize-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase ml-1">Nhóm giai đoạn (Cột)</label>
+                    <select 
+                      value={editNodeCategory}
+                      onChange={e => setEditNodeCategory(e.target.value)}
+                      className="w-full h-11 px-3 rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm"
+                    >
+                      <option value="Basic">Basic (Giai đoạn 1)</option>
+                      <option value="Advanced">Advanced (Giai đoạn 2)</option>
+                      <option value="Master">Master (Giai đoạn 3)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase ml-1">Kỹ năng học trước (Tiền đề)</label>
+                    <select 
+                      multiple
+                      value={editNodePrereqs}
+                      onChange={e => {
+                        const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
+                        setEditNodePrereqs(selectedOptions);
+                      }}
+                      className="w-full h-24 p-2 rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm"
+                    >
+                      {roadmap.nodes.filter(rn => rn.id !== selectedNode.id).map(n => (
+                        <option key={n.id} value={n.id}>
+                          {n.title} ({n.category})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[9px] text-muted-foreground italic">Giữ Ctrl (hoặc Cmd) để chọn nhiều kỹ năng tiền đề.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-muted-foreground uppercase">Mô tả</p>
+                  <p className="text-sm leading-relaxed">{selectedNode.description || 'Chưa có mô tả chi tiết cho kỹ năng này.'}</p>
+                </div>
+              )}
+
+              {/* Progress and status controls */}
+              <div className="space-y-4 pt-2 border-t">
+                <p className="text-xs font-bold text-muted-foreground uppercase">Trạng thái học tập</p>
                 <div className="grid grid-cols-3 gap-2">
                   <button onClick={() => setEditStatus(0)} className={`h-10 rounded-xl text-xs font-bold transition-all border ${editStatus === 0 ? 'bg-muted border-muted-foreground/30' : 'bg-transparent text-muted-foreground'}`}>Chưa học</button>
                   <button onClick={() => setEditStatus(1)} className={`h-10 rounded-xl text-xs font-bold transition-all border ${editStatus === 1 ? 'bg-blue-500/10 text-blue-600 border-blue-500/30' : 'bg-transparent text-muted-foreground'}`}>Đang học</button>
@@ -494,9 +744,9 @@ export function RoadmapPage() {
                      <div className="flex items-center justify-between">
                        <p className="text-xs font-bold text-muted-foreground uppercase">Chứng chỉ / Minh chứng <span className="text-destructive">*</span></p>
                        {selectedNode.certificateUrl && (
-                         <a href={selectedNode.certificateUrl} target="_blank" className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline">
-                            Xem hiện tại <ExternalLink className="h-3 w-3" />
-                         </a>
+                          <a href={selectedNode.certificateUrl} target="_blank" className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline">
+                             Xem hiện tại <ExternalLink className="h-3 w-3" />
+                          </a>
                        )}
                      </div>
                      <input 
@@ -518,7 +768,94 @@ export function RoadmapPage() {
               >
                 Lưu thay đổi
               </button>
+              {selectedNode.isCustom && (
+                <button 
+                  onClick={handleDeleteCustomNode}
+                  className="w-full h-12 rounded-2xl border border-destructive/30 text-destructive font-bold hover:bg-destructive/10 transition"
+                >
+                  Xoá kỹ năng tự chọn
+                </button>
+              )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Add Custom Node ── */}
+      {showAddCustomNodeModal && roadmap && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-card w-full max-w-md rounded-3xl border shadow-2xl p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <Plus className="h-5 w-5 text-primary" /> Thêm kỹ năng tự chọn
+              </h3>
+              <button onClick={() => setShowAddCustomNodeModal(false)} className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase ml-1">Tên kỹ năng</label>
+                <input 
+                  autoFocus
+                  value={customTitle}
+                  onChange={e => setCustomTitle(e.target.value)}
+                  placeholder="Nhập tên kỹ năng..."
+                  className="w-full h-11 px-4 rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase ml-1">Mô tả chi tiết</label>
+                <textarea 
+                  value={customDesc}
+                  onChange={e => setCustomDesc(e.target.value)}
+                  placeholder="Nhập mô tả chi tiết..."
+                  className="w-full h-20 p-3 rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm resize-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase ml-1">Nhóm giai đoạn (Cột)</label>
+                <select 
+                  value={customCategory}
+                  onChange={e => setCustomCategory(e.target.value)}
+                  className="w-full h-11 px-3 rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm"
+                >
+                  <option value="Basic">Basic (Giai đoạn 1)</option>
+                  <option value="Advanced">Advanced (Giai đoạn 2)</option>
+                  <option value="Master">Master (Giai đoạn 3)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase ml-1">Kỹ năng học trước (Tiền đề)</label>
+                <select 
+                  multiple
+                  value={customPrereqs}
+                  onChange={e => {
+                    const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
+                    setCustomPrereqs(selectedOptions);
+                  }}
+                  className="w-full h-24 p-2 rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm"
+                >
+                  {roadmap.nodes.map(n => (
+                    <option key={n.id} value={n.id}>
+                      {n.title} ({n.category})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-muted-foreground italic">Giữ Ctrl (hoặc Cmd) để chọn nhiều kỹ năng tiền đề.</p>
+              </div>
+            </div>
+
+            <button 
+              onClick={handleAddCustomNode}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition shadow-xl shadow-primary/20"
+            >
+              Thêm kỹ năng
+            </button>
           </div>
         </div>
       )}
@@ -553,7 +890,6 @@ export function RoadmapPage() {
 
       </div>
 
-      {/* Add at the very end of return */}
       <ConfirmModal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}

@@ -33,7 +33,7 @@ export function FinancePage() {
 
   const { summary, loading: loadSum, refresh: refreshSum } = useFinanceSummary(year, month);
   const { goals, loading: loadGoals, refresh: refreshGoals } = useSavingGoals();
-  const { prediction, loading: loadPred } = useAiPrediction();
+  const { prediction, loading: loadPred, refresh: refreshPred } = useAiPrediction();
   const { categories, refresh: refreshCats } = useCategories();
 
   // Reset and Category modals
@@ -160,27 +160,27 @@ export function FinancePage() {
       <div className="animate-fade-in-up space-y-6">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="page-title">Quản lý tài chính</h1>
           <p className="page-subtitle">Theo dõi thu chi, tiết kiệm và dự báo chi tiêu AI</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button onClick={() => setShowResetConfirm(true)}
-            className="flex items-center gap-2 h-9 px-4 rounded-xl border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/10 transition">
-            <Trash2 className="h-4 w-4" /> Reset dữ liệu
+            className="flex items-center gap-2 h-9 px-3 sm:px-4 rounded-xl border border-destructive/30 text-destructive text-xs sm:text-sm font-medium hover:bg-destructive/10 transition whitespace-nowrap">
+            <Trash2 className="h-4 w-4 shrink-0" /> Reset
           </button>
           <button onClick={() => setShowCategoryModal(true)}
-            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-muted text-foreground text-sm font-medium hover:bg-muted/80 transition">
-            Quản lý danh mục
+            className="flex items-center gap-2 h-9 px-3 sm:px-4 rounded-xl bg-muted text-foreground text-xs sm:text-sm font-medium hover:bg-muted/80 transition whitespace-nowrap">
+            Danh mục
           </button>
           <button onClick={() => {
             setEditingTxId(null);
             setTxAmount(''); setTxNote(''); setTxCatId('');
             setShowAdd(true);
           }}
-            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition shadow shadow-primary/20">
-            <Plus className="h-4 w-4" /> Thêm giao dịch
+            className="flex items-center gap-2 h-9 px-3 sm:px-4 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-medium hover:bg-primary/90 transition shadow shadow-primary/20 whitespace-nowrap">
+            <Plus className="h-4 w-4 shrink-0" /> Thêm giao dịch
           </button>
         </div>
       </div>
@@ -317,27 +317,51 @@ export function FinancePage() {
       </div>
 
       {/* ── AI Prediction ── */}
-      <div className="rounded-2xl border bg-gradient-to-br from-violet-500/10 to-purple-500/5 p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <Bot className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold text-sm">Dự báo chi tiêu AI</h3>
-          {prediction?.confidence && (
-            <span className="text-xs text-muted-foreground ml-auto">
-              Độ tin cậy: {Math.round(prediction.confidence * 100)}%
-            </span>
-          )}
+      <div className="rounded-2xl border glass bg-gradient-to-br from-primary/5 to-accent/5 p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Bot className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base">Gợi ý tài chính từ AI</h3>
+              {prediction?.confidence && (
+                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                  Độ tin cậy: {Math.round(prediction.confidence * 100)}%
+                </p>
+              )}
+            </div>
+          </div>
+          <button 
+            onClick={() => refreshPred(true)} 
+            disabled={loadPred}
+            className="flex items-center gap-2 h-9 px-4 rounded-xl border border-primary/20 text-primary text-xs font-bold hover:bg-primary/10 transition disabled:opacity-50"
+          >
+            {loadPred ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TrendingUp className="h-3.5 w-3.5" />}
+            Làm mới gợi ý
+          </button>
         </div>
+
         {loadPred ? (
-          <div className="h-10 flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Đang phân tích...
+          <div className="py-8 flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
+            <p className="animate-pulse">Gemini đang phân tích dữ liệu của bạn...</p>
           </div>
         ) : prediction ? (
-          <div className="space-y-2">
-            <p className="text-2xl font-bold text-primary">{prediction.predictedAmount.toLocaleString()}đ</p>
-            <p className="text-xs text-muted-foreground">Dự đoán chi tiêu {prediction.month}</p>
-            <p className="text-sm leading-relaxed text-foreground/80">{prediction.insight}</p>
+          <div className="grid md:grid-cols-3 gap-6 items-center">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground font-bold uppercase tracking-tight">Dự báo chi {prediction.month}</p>
+              <p className="text-3xl font-black text-primary tracking-tighter">{prediction.predictedAmount.toLocaleString()}đ</p>
+            </div>
+            <div className="md:col-span-2 bg-white/40 dark:bg-black/20 rounded-xl p-4 border border-white/20">
+              <p className="text-sm leading-relaxed font-medium italic">"{prediction.insight}"</p>
+            </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="py-4 text-sm text-muted-foreground italic text-center">
+            Chưa có dữ liệu dự báo. Hãy nhấn "Làm mới gợi ý" để bắt đầu.
+          </div>
+        )}
       </div>
 
 

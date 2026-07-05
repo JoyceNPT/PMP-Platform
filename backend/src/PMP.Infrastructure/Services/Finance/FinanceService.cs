@@ -4,15 +4,22 @@ using PMP.Application.Features.Finance.Interfaces;
 using PMP.Domain.Entities.Finance;
 using PMP.Domain.Enums;
 using PMP.Infrastructure.Persistence;
+using PMP.Infrastructure.Services.System;
 using PMP.Shared.Wrappers;
+using System.Text.Json;
 
 namespace PMP.Infrastructure.Services.Finance;
 
 public class FinanceService : IFinanceService
 {
     private readonly ApplicationDbContext _db;
+    private readonly IAiService _aiService;
 
-    public FinanceService(ApplicationDbContext db) => _db = db;
+    public FinanceService(ApplicationDbContext db, IAiService aiService)
+    {
+        _db = db;
+        _aiService = aiService;
+    }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -302,66 +309,116 @@ public class FinanceService : IFinanceService
         });
     }
 
-    // ─── AI Prediction (Gemini mock — Phase 5 placeholder) ───────────────────
+    // ─── AI Prediction (Real Gemini Integration) ─────────────────────────────
 
-    public async Task<ApiResponse<AiPredictionDto>> GetAiPredictionAsync(Guid userId)
+    public async Task<ApiResponse<AiPredictionDto>> GetAiPredictionAsync(Guid userId, bool forceReload = false)
     {
-        var now   = DateTime.UtcNow;
-        var last3 = await _db.Transactions
-            .Where(t => t.UserId == userId
-                && t.Type == TransactionType.Expense
-                && t.TransactionDate >= DateOnly.FromDateTime(now.AddMonths(-3)))
+        var now = DateTime.UtcNow;
+        var predictionMonth = DateOnly.FromDateTime(new DateTime(now.Year, now.Month, 1).AddMonths(1));
+
+        // 1. Check existing prediction if not forced
+        if (!forceReload)
+        {
+            var existing = await _db.AiSpendingPredictions
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.PredictionMonth == predictionMonth);
+
+            if (existing != null)
+            {
+                return new ApiResponse<AiPredictionDto>(new AiPredictionDto
+                {
+                    PredictedAmount = existing.PredictedAmount,
+                    Confidence      = existing.Confidence,
+                    Month           = $"Th.{existing.PredictionMonth.Month}/{existing.PredictionMonth.Year}",
+                    Insight         = existing.RawResponse ?? "Không có chi tiết."
+                });
+            }
+        }
+
+        // 2. Fetch context for AI
+        var last3Months = await _db.Transactions
+            .Include(t => t.Category)
+            .Where(t => t.UserId == userId && t.TransactionDate >= DateOnly.FromDateTime(now.AddMonths(-3)))
             .ToListAsync();
 
-        if (!last3.Any())
+        var activeGoals = await _db.SavingGoals
+            .Where(g => g.UserId == userId && g.Status == SavingGoalStatus.InProgress)
+            .ToListAsync();
+
+        if (last3Months.Count < 5)
         {
             return new ApiResponse<AiPredictionDto>(new AiPredictionDto
             {
                 PredictedAmount = 0,
                 Confidence      = 0,
-                Month           = $"Th.{now.Month + 1}/{now.Year}",
-                Insight         = "Chưa đủ dữ liệu để dự đoán. Hãy ghi lại chi tiêu trong ít nhất 1 tháng."
+                Month           = $"Th.{predictionMonth.Month}/{predictionMonth.Year}",
+                Insight         = "Bạn cần ghi chép thêm ít nhất 5 giao dịch để AI có thể phân tích và đưa ra lời khuyên chính xác."
             });
         }
 
-        // Simple linear average prediction
-        var avgMonthly = last3.Sum(t => t.Amount) / 3;
-        var predicted  = Math.Round(avgMonthly * 1.05m, 0); // +5% trend
+        // 3. Prepare AI Prompt
+        var income = last3Months.Where(t => t.Type == TransactionType.Income).Sum(t => t.Amount);
+        var expense = last3Months.Where(t => t.Type == TransactionType.Expense).Sum(t => t.Amount);
+        var categories = last3Months.Where(t => t.Type == TransactionType.Expense)
+            .GroupBy(t => t.Category?.Name ?? "Khác")
+            .Select(g => $"- {g.Key}: {g.Sum(t => t.Amount):N0}đ")
+            .ToList();
 
-        // Save prediction to DB
-        var predictionDate = DateOnly.FromDateTime(new DateTime(now.Year, now.Month, 1).AddMonths(1));
-        var existing = await _db.AiSpendingPredictions
-            .FirstOrDefaultAsync(p => p.UserId == userId && p.PredictionMonth == predictionDate);
+        var goalsStr = string.Join("\n", activeGoals.Select(g => $"- {g.Name}: {g.CurrentAmount:N0}/{g.TargetAmount:N0}đ"));
 
-        if (existing is null)
+        var prompt = $@"
+            Dựa trên dữ liệu tài chính của tôi trong 3 tháng qua:
+            - Tổng thu nhập: {income:N0}đ
+            - Tổng chi tiêu: {expense:N0}đ
+            - Chi tiêu theo hạng mục:
+            {string.Join("\n", categories)}
+
+            Mục tiêu tiết kiệm đang thực hiện:
+            {goalsStr}
+
+            Hãy thực hiện 2 việc:
+            1. Dự đoán số tiền tôi sẽ chi tiêu trong tháng tới (Tháng {predictionMonth.Month}).
+            2. Đưa ra 1 lời khuyên tài chính cực kỳ ngắn gọn (tối đa 2 câu) để giúp tôi đạt được mục tiêu tiết kiệm.
+
+            Trả về kết quả dưới định dạng JSON sau:
+            {{
+                ""predictedAmount"": 0,
+                ""confidence"": 0.8,
+                ""insight"": ""Lời khuyên của bạn ở đây""
+            }}
+        ";
+
+        var systemPrompt = "Bạn là chuyên gia tư vấn tài chính cá nhân. Trả lời bằng tiếng Việt, ngắn gọn, súc tích và chỉ trả về JSON.";
+
+        var aiResult = await _aiService.GetStructuredResponseAsync<AiPredictionDto>(prompt, systemPrompt);
+
+        if (aiResult == null)
+            return new ApiResponse<AiPredictionDto>("AI hiện không phản hồi, vui lòng thử lại sau.");
+
+        // 4. Save to DB
+        var dbPrediction = await _db.AiSpendingPredictions
+            .FirstOrDefaultAsync(p => p.UserId == userId && p.PredictionMonth == predictionMonth);
+
+        if (dbPrediction == null)
         {
-            _db.AiSpendingPredictions.Add(new Domain.Entities.Finance.AiSpendingPrediction
-            {
-                UserId          = userId,
-                PredictionMonth = predictionDate,
-                PredictedAmount = predicted,
-                Confidence      = 0.72m,
-                RawResponse     = "Mock prediction — Gemini integration pending"
-            });
-            await _db.SaveChangesAsync();
+            dbPrediction = new AiSpendingPrediction { UserId = userId, PredictionMonth = predictionMonth };
+            _db.AiSpendingPredictions.Add(dbPrediction);
         }
 
-        return new ApiResponse<AiPredictionDto>(new AiPredictionDto
-        {
-            PredictedAmount = predicted,
-            Confidence      = 0.72m,
-            Month           = $"Th.{predictionDate.Month}/{predictionDate.Year}",
-            Insight         = $"Dựa trên chi tiêu trung bình 3 tháng gần nhất ({avgMonthly:N0}đ/tháng), " +
-                              $"dự đoán tháng tới bạn sẽ chi khoảng {predicted:N0}đ. " +
-                              $"Hãy lên kế hoạch ngân sách phù hợp!"
-        });
+        dbPrediction.PredictedAmount = aiResult.PredictedAmount;
+        dbPrediction.Confidence      = aiResult.Confidence ?? 0.8m;
+        dbPrediction.RawResponse     = aiResult.Insight;
+        dbPrediction.UpdatedAt       = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        aiResult.Month = $"Th.{predictionMonth.Month}/{predictionMonth.Year}";
+        return new ApiResponse<AiPredictionDto>(aiResult, "Cập nhật gợi ý AI thành công.");
     }
 
     // ─── Reset ───────────────────────────────────────────────────────────────
 
     public async Task<ApiResponse<bool>> ResetFinanceDataAsync(Guid userId)
     {
-        // Must delete transactions first due to foreign keys to Category
         var txs = await _db.Transactions.Where(t => t.UserId == userId).ToListAsync();
         _db.Transactions.RemoveRange(txs);
 

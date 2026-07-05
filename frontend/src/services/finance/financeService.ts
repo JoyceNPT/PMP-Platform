@@ -125,8 +125,8 @@ export const financeService = {
     const res = await apiClient.get('/finance/summary', { params: { year, month } });
     return res.data.data;
   },
-  getAiPrediction: async (): Promise<AiPrediction> => {
-    const res = await apiClient.get('/finance/ai-prediction');
+  getAiPrediction: async (forceReload: boolean = false): Promise<AiPrediction> => {
+    const res = await apiClient.get('/finance/ai-prediction', { params: { forceReload } });
     return res.data.data;
   },
 

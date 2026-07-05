@@ -47,13 +47,15 @@ export function useAiPrediction() {
   const [prediction, setPrediction] = useState<AiPrediction | null>(null);
   const [loading, setLoading]       = useState(true);
 
-  useEffect(() => {
-    financeService.getAiPrediction()
-      .then(setPrediction)
-      .finally(() => setLoading(false));
+  const fetch = useCallback(async (force: boolean = false) => {
+    setLoading(true);
+    try { setPrediction(await financeService.getAiPrediction(force)); }
+    finally { setLoading(false); }
   }, []);
 
-  return { prediction, loading };
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return { prediction, loading, refresh: fetch };
 }
 
 export function useCategories() {
