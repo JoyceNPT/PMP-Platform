@@ -135,6 +135,7 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
             .IsRequired();
 
         builder.Property(t => t.Note).HasMaxLength(500);
+        builder.Property(t => t.AttachmentUrl).HasMaxLength(1000);
         builder.Property(t => t.IsDeleted).HasDefaultValue(false);
 
         // Indexes cho chart 6 tháng và filter tháng hiện tại

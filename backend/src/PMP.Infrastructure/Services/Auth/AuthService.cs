@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Text.Json;
 using Google.Apis.Auth;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using PMP.Application.Features.Auth.DTOs;
@@ -13,6 +14,7 @@ using PMP.Application.Features.Auth.Interfaces;
 using PMP.Application.Features.System.Interfaces;
 using PMP.Domain.Entities.Auth;
 using PMP.Domain.Enums;
+using PMP.Infrastructure.Persistence;
 using PMP.Shared.Wrappers;
 
 namespace PMP.Infrastructure.Services.Auth;
@@ -23,13 +25,20 @@ public class AuthService : IAuthService
     private readonly IConfiguration _configuration;
     private readonly IEmailService _emailService;
     private readonly ISystemSettingService _systemSettingService;
+    private readonly ApplicationDbContext _db;
 
-    public AuthService(UserManager<ApplicationUser> userManager, IConfiguration configuration, IEmailService emailService, ISystemSettingService systemSettingService)
+    public AuthService(
+        UserManager<ApplicationUser> userManager,
+        IConfiguration configuration,
+        IEmailService emailService,
+        ISystemSettingService systemSettingService,
+        ApplicationDbContext db)
     {
         _userManager = userManager;
         _configuration = configuration;
         _emailService = emailService;
         _systemSettingService = systemSettingService;
+        _db = db;
     }
 
     public async Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request)
@@ -105,9 +114,7 @@ public class AuthService : IAuthService
         }
 
         var accessToken = GenerateJwtToken(user);
-        var refreshToken = GenerateRefreshToken();
-
-        // In a complete implementation, the refresh token should be saved to the database.
+        var refreshToken = await CreateRefreshTokenAsync(user.Id);
         
         return new ApiResponse<AuthResponse>(new AuthResponse
         {
@@ -166,7 +173,7 @@ public class AuthService : IAuthService
             }
 
             var accessToken = GenerateJwtToken(user);
-            var refreshToken = GenerateRefreshToken();
+            var refreshToken = await CreateRefreshTokenAsync(user.Id);
 
             return new ApiResponse<AuthResponse>(new AuthResponse
             {
@@ -182,6 +189,60 @@ public class AuthService : IAuthService
         {
             return new ApiResponse<AuthResponse>($"Google verification failed: {ex.Message}");
         }
+    }
+
+    public async Task<ApiResponse<AuthResponse>> RefreshTokenAsync(string refreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            return new ApiResponse<AuthResponse>("Refresh token is missing.");
+
+        var tokenHash = HashToken(refreshToken);
+        var storedToken = await _db.RefreshTokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash);
+
+        if (storedToken is null || storedToken.IsRevoked || storedToken.ExpiresAt <= DateTime.UtcNow)
+            return new ApiResponse<AuthResponse>("Refresh token is invalid or expired.");
+
+        var user = storedToken.User;
+        if (user.IsDeleted)
+            return new ApiResponse<AuthResponse>("User is no longer active.");
+
+        var newRefreshToken = await CreateRefreshTokenAsync(user.Id);
+        var newStoredTokenHash = HashToken(newRefreshToken);
+        var newStoredToken = await _db.RefreshTokens.FirstAsync(t => t.TokenHash == newStoredTokenHash);
+
+        storedToken.IsRevoked = true;
+        storedToken.RevokedAt = DateTime.UtcNow;
+        storedToken.ReplacedByTokenId = newStoredToken.Id;
+        await _db.SaveChangesAsync();
+
+        return new ApiResponse<AuthResponse>(new AuthResponse
+        {
+            AccessToken = GenerateJwtToken(user),
+            RefreshToken = newRefreshToken,
+            UserId = user.Id,
+            Email = user.Email!,
+            FullName = user.FullName,
+            AvatarUrl = user.AvatarUrl
+        }, "Token refreshed successfully.");
+    }
+
+    public async Task<ApiResponse<bool>> LogoutAsync(string refreshToken)
+    {
+        if (!string.IsNullOrWhiteSpace(refreshToken))
+        {
+            var tokenHash = HashToken(refreshToken);
+            var storedToken = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash);
+            if (storedToken is not null && !storedToken.IsRevoked)
+            {
+                storedToken.IsRevoked = true;
+                storedToken.RevokedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+            }
+        }
+
+        return new ApiResponse<bool>(true, "Logged out successfully.");
     }
 
     public async Task<ApiResponse<ApplicationUser>> GetProfileAsync(Guid userId)
@@ -303,6 +364,28 @@ public class AuthService : IAuthService
         using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(randomNumber);
         return Convert.ToBase64String(randomNumber);
+    }
+
+    private async Task<string> CreateRefreshTokenAsync(Guid userId)
+    {
+        var refreshToken = GenerateRefreshToken();
+        var expirationDays = int.TryParse(_configuration["Jwt:RefreshTokenExpirationDays"], out var days) ? days : 30;
+
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = userId,
+            TokenHash = HashToken(refreshToken),
+            ExpiresAt = DateTime.UtcNow.AddDays(expirationDays)
+        });
+
+        await _db.SaveChangesAsync();
+        return refreshToken;
+    }
+
+    private static string HashToken(string token)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
     private async Task<bool> VerifyRecaptchaAsync(string token)

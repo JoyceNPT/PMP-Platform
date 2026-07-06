@@ -58,7 +58,8 @@ public class FinanceService : IFinanceService
         Type            = (int)t.Type,
         Amount          = t.Amount,
         TransactionDate = t.TransactionDate,
-        Note            = t.Note
+        Note            = t.Note,
+        AttachmentUrl   = t.AttachmentUrl
     };
 
     private static FinanceGroupMemberDto MapMember(FinanceGroupMember m) => new()
@@ -334,7 +335,8 @@ public class FinanceService : IFinanceService
             Type            = (TransactionType)req.Type,
             Amount          = req.Amount,
             TransactionDate = req.TransactionDate,
-            Note            = req.Note
+            Note            = req.Note,
+            AttachmentUrl   = req.AttachmentUrl
         };
         tx.Category = cat;
         _db.Transactions.Add(tx);
@@ -353,6 +355,7 @@ public class FinanceService : IFinanceService
         tx.Amount          = req.Amount;
         tx.TransactionDate = req.TransactionDate;
         tx.Note            = req.Note;
+        tx.AttachmentUrl   = req.AttachmentUrl;
         await _db.SaveChangesAsync();
 
         // reload category

@@ -30,6 +30,7 @@ public class Transaction : BaseEntity
     public decimal Amount { get; set; }                         // precision(18,2), > 0
     public DateOnly TransactionDate { get; set; }
     public string? Note { get; set; }                           // max 500
+    public string? AttachmentUrl { get; set; }                  // receipt/image URL
 
     // ── Navigation ───────────────────────────────────────────────────────────
     public FinanceCategory Category { get; set; } = null!;

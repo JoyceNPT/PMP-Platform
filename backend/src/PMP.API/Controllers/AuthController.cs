@@ -22,6 +22,23 @@ public class AuthController : ControllerBase
         _emailService = emailService;
     }
 
+    private CookieOptions BuildRefreshCookieOptions()
+    {
+        var isDevelopment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
+        var expirationDays = int.TryParse(Environment.GetEnvironmentVariable("Jwt__RefreshTokenExpirationDays"), out var days)
+            ? days
+            : 30;
+
+        return new CookieOptions
+        {
+            HttpOnly = true,
+            Expires = DateTime.UtcNow.AddDays(expirationDays),
+            Secure = !isDevelopment,
+            SameSite = isDevelopment ? SameSiteMode.Lax : SameSiteMode.None,
+            Path = "/"
+        };
+    }
+
     [HttpPost("register")]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> Register([FromBody] RegisterRequest request)
     {
@@ -38,15 +55,7 @@ public class AuthController : ControllerBase
         var response = await _authService.LoginAsync(request);
         if (response.Succeeded)
         {
-            // Set Refresh Token as HttpOnly Cookie
-            var cookieOptions = new CookieOptions
-            {
-                HttpOnly = true,
-                Expires = DateTime.UtcNow.AddDays(7),
-                Secure = true,
-                SameSite = SameSiteMode.Strict
-            };
-            Response.Cookies.Append("refreshToken", response.Data!.RefreshToken, cookieOptions);
+            Response.Cookies.Append("refreshToken", response.Data!.RefreshToken, BuildRefreshCookieOptions());
 
             return Ok(response);
         }
@@ -60,19 +69,34 @@ public class AuthController : ControllerBase
         var response = await _authService.GoogleLoginAsync(idToken);
         if (response.Succeeded)
         {
-            var cookieOptions = new CookieOptions
-            {
-                HttpOnly = true,
-                Expires = DateTime.UtcNow.AddDays(7),
-                Secure = true,
-                SameSite = SameSiteMode.Strict
-            };
-            Response.Cookies.Append("refreshToken", response.Data!.RefreshToken, cookieOptions);
+            Response.Cookies.Append("refreshToken", response.Data!.RefreshToken, BuildRefreshCookieOptions());
 
             return Ok(response);
         }
 
         return Unauthorized(response);
+    }
+
+    [HttpPost("refresh-token")]
+    public async Task<ActionResult<ApiResponse<AuthResponse>>> RefreshToken()
+    {
+        var refreshToken = Request.Cookies["refreshToken"];
+        var response = await _authService.RefreshTokenAsync(refreshToken ?? string.Empty);
+
+        if (!response.Succeeded)
+            return Unauthorized(response);
+
+        Response.Cookies.Append("refreshToken", response.Data!.RefreshToken, BuildRefreshCookieOptions());
+        return Ok(response);
+    }
+
+    [HttpPost("logout")]
+    public async Task<ActionResult<ApiResponse<bool>>> Logout()
+    {
+        var refreshToken = Request.Cookies["refreshToken"];
+        var response = await _authService.LogoutAsync(refreshToken ?? string.Empty);
+        Response.Cookies.Delete("refreshToken", BuildRefreshCookieOptions());
+        return Ok(response);
     }
 
     [HttpPost("test-email")]

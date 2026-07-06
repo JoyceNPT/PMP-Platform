@@ -24,6 +24,7 @@ export interface Transaction {
   amount: number;
   transactionDate: string;  // "YYYY-MM-DD"
   note?: string;
+  attachmentUrl?: string;
 }
 
 export interface SavingGoal {
@@ -133,12 +134,21 @@ export const financeService = {
     return res.data.data;
   },
   updateTransaction: async (id: string, data: {
-    categoryId: string; amount: number; transactionDate: string; note?: string;
+    categoryId: string; amount: number; transactionDate: string; note?: string; attachmentUrl?: string;
   }): Promise<Transaction> => {
     const res = await apiClient.put(`/finance/transactions/${id}`, data);
     return res.data.data;
   },
   deleteTransaction: async (id: string) => apiClient.delete(`/finance/transactions/${id}`),
+  uploadFinanceAttachment: async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.post('/upload', formData, {
+      params: { feature: 'finance' },
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.data;
+  },
 
   // Saving Goals
   getSavingGoals: async (): Promise<SavingGoal[]> => {

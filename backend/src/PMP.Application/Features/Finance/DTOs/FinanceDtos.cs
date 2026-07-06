@@ -41,6 +41,7 @@ public class TransactionDto
     public decimal Amount { get; set; }
     public DateOnly TransactionDate { get; set; }
     public string? Note { get; set; }
+    public string? AttachmentUrl { get; set; }
 }
 
 public class CreateTransactionRequest
@@ -50,6 +51,7 @@ public class CreateTransactionRequest
     public decimal Amount { get; set; }
     public DateOnly TransactionDate { get; set; }
     public string? Note { get; set; }
+    public string? AttachmentUrl { get; set; }
 }
 
 public class UpdateTransactionRequest
@@ -58,6 +60,7 @@ public class UpdateTransactionRequest
     public decimal Amount { get; set; }
     public DateOnly TransactionDate { get; set; }
     public string? Note { get; set; }
+    public string? AttachmentUrl { get; set; }
 }
 
 public class TransactionQueryParams

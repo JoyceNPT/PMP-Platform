@@ -11,7 +11,8 @@ import {
   Crown, ScrollText, Coins, BriefcaseBusiness, HandCoins, WalletCards,
   UtensilsCrossed, CarFront, GraduationCap, House, Plane, Gamepad2,
   Music, Shirt, Coffee, Dumbbell, HeartPulse, Sparkles, BookOpen,
-  ReceiptText, ShoppingBag, Gift, Palette, Wrench, Fuel, Smartphone
+  ReceiptText, ShoppingBag, Gift, Palette, Wrench, Fuel, Smartphone,
+  Image as ImageIcon, Upload
 } from 'lucide-react';
 import { useFinanceSummary, useSavingGoals, useAiPrediction, useCategories, useTransactions, useFinanceSharing } from '@/features/finance/components/useFinance';
 import { financeService, type FinanceSharingOverview } from '@/services/finance/financeService';
@@ -106,6 +107,9 @@ export function FinancePage() {
   const [txCatId, setTxCatId]       = useState('');
   const [txSubmitting, setTxSubmitting] = useState(false);
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
+  const [txAttachmentUrl, setTxAttachmentUrl] = useState('');
+  const [txAttachmentFile, setTxAttachmentFile] = useState<File | null>(null);
+  const [txAttachmentPreview, setTxAttachmentPreview] = useState('');
 
   // Quick-add saving goal state
   const [showGoal, setShowGoal]     = useState(false);
@@ -125,6 +129,43 @@ export function FinancePage() {
     else setMonth(m => m + 1);
   };
 
+  const resetTxAttachment = useCallback(() => {
+    setTxAttachmentFile(currentFile => {
+      if (currentFile && txAttachmentPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(txAttachmentPreview);
+      }
+      return null;
+    });
+    setTxAttachmentPreview('');
+    setTxAttachmentUrl('');
+  }, [txAttachmentPreview]);
+
+  const handleAttachmentSelect = (file?: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Chỉ hỗ trợ upload file ảnh.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Ảnh tối đa 5MB.');
+      return;
+    }
+    if (txAttachmentFile && txAttachmentPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(txAttachmentPreview);
+    }
+    setTxAttachmentFile(file);
+    setTxAttachmentPreview(URL.createObjectURL(file));
+    setTxAttachmentUrl('');
+  };
+
+  useEffect(() => {
+    return () => {
+      if (txAttachmentPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(txAttachmentPreview);
+      }
+    };
+  }, [txAttachmentPreview]);
+
   const handleAddTx = async () => {
     if (!txAmount || !txCatId) return;
     if (new Date(txDate) > new Date()) {
@@ -133,12 +174,16 @@ export function FinancePage() {
     }
     setTxSubmitting(true);
     try {
+      const attachmentUrl = txAttachmentFile
+        ? await financeService.uploadFinanceAttachment(txAttachmentFile)
+        : txAttachmentUrl || undefined;
       const data = {
         categoryId: txCatId,
         type: txType,
         amount: parseFloat(txAmount),
         transactionDate: txDate,
         note: txNote || undefined,
+        attachmentUrl,
       };
       if (editingTxId) {
         await financeService.updateTransaction(editingTxId, data);
@@ -148,6 +193,7 @@ export function FinancePage() {
       setShowAdd(false);
       setEditingTxId(null);
       setTxAmount(''); setTxNote(''); setTxCatId('');
+      resetTxAttachment();
       refreshSum();
     } finally {
       setTxSubmitting(false);
@@ -228,6 +274,7 @@ export function FinancePage() {
           <button onClick={() => {
             setEditingTxId(null);
             setTxAmount(''); setTxNote(''); setTxCatId('');
+            resetTxAttachment();
             setShowAdd(true);
           }}
             className="flex items-center gap-2 h-9 px-3 sm:px-4 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-medium hover:bg-primary/90 transition shadow shadow-primary/20 whitespace-nowrap">
@@ -330,6 +377,9 @@ export function FinancePage() {
              setTxCatId(tx.categoryId);
              setTxNote(tx.note || '');
              setTxDate(tx.transactionDate.split('T')[0]);
+             setTxAttachmentFile(null);
+             setTxAttachmentUrl(tx.attachmentUrl || '');
+             setTxAttachmentPreview(tx.attachmentUrl || '');
              setShowAdd(true);
           }}
           onDelete={(id) => {
@@ -483,8 +533,43 @@ export function FinancePage() {
               onChange={e => setTxNote(e.target.value)}
               className="flex h-10 w-full rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
 
+            <div className="rounded-xl border border-dashed bg-muted/10 p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                  <ImageIcon className="h-4 w-4" />
+                  Ảnh hoá đơn / minh chứng
+                </label>
+                {txAttachmentPreview && (
+                  <button
+                    type="button"
+                    onClick={resetTxAttachment}
+                    className="text-xs font-medium text-destructive hover:underline"
+                  >
+                    Gỡ ảnh
+                  </button>
+                )}
+              </div>
+
+              {txAttachmentPreview ? (
+                <a href={txAttachmentPreview} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border bg-background">
+                  <img src={txAttachmentPreview} alt="Ảnh giao dịch" className="h-32 w-full object-cover" />
+                </a>
+              ) : (
+                <label className="flex h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border bg-background text-xs text-muted-foreground transition hover:bg-muted">
+                  <Upload className="h-5 w-5" />
+                  Chọn ảnh từ thiết bị
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => handleAttachmentSelect(e.target.files?.[0])}
+                  />
+                </label>
+              )}
+            </div>
+
             <div className="flex gap-3 justify-end pt-1">
-              <button onClick={() => setShowAdd(false)} className="h-10 px-4 rounded-xl border text-sm hover:bg-muted transition">Huỷ</button>
+              <button onClick={() => { setShowAdd(false); resetTxAttachment(); }} className="h-10 px-4 rounded-xl border text-sm hover:bg-muted transition">Huỷ</button>
               <button onClick={handleAddTx} disabled={txSubmitting || !txAmount}
                 className="h-10 px-5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition flex items-center gap-2 disabled:opacity-60">
                 {txSubmitting && <Loader2 className="h-4 w-4 animate-spin" />} Lưu
@@ -1024,6 +1109,17 @@ function TransactionList({ month, year, onRefresh: _onRefresh, onEdit, onDelete 
                 {tx.note ?? new Date(tx.transactionDate).toLocaleDateString('vi-VN')}
                 {tx.ownerName ? ` · ${tx.ownerName}` : ''}
               </p>
+              {tx.attachmentUrl && (
+                <a
+                  href={tx.attachmentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  <ImageIcon className="h-3 w-3" />
+                  Ảnh
+                </a>
+              )}
             </div>
           </div>
           <div className="text-right flex items-center gap-4">

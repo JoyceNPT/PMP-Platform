@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { CONFIG } from '@/config';
 
 interface User {
   id: string;
@@ -13,7 +14,8 @@ interface AuthState {
   accessToken: string | null;
   isAuthenticated: boolean;
   setAuth: (user: User, accessToken: string) => void;
-  logout: () => void;
+  setAccessToken: (accessToken: string) => void;
+  logout: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -26,7 +28,19 @@ export const useAuthStore = create<AuthState>()(
         localStorage.setItem('accessToken', accessToken);
         set({ user, accessToken, isAuthenticated: true });
       },
-      logout: () => {
+      setAccessToken: (accessToken) => {
+        localStorage.setItem('accessToken', accessToken);
+        set({ accessToken, isAuthenticated: true });
+      },
+      logout: async () => {
+        try {
+          await fetch(`${CONFIG.API_BASE_URL}/auth/logout`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+        } catch (error) {
+          console.error('Logout request failed', error);
+        }
         localStorage.removeItem('accessToken');
         set({ user: null, accessToken: null, isAuthenticated: false });
       },
