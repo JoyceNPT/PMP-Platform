@@ -23,6 +23,7 @@ export const notificationService = {
   },
   markAsRead: async (id: string) => apiClient.post(`/notifications/${id}/read`),
   markAllAsRead: async () => apiClient.post('/notifications/read-all'),
+  deleteNotification: async (id: string) => apiClient.delete(`/notifications/${id}`),
 };
 
 let notificationHubConnection: signalR.HubConnection | null = null;

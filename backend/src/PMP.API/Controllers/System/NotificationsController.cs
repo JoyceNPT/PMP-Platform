@@ -82,6 +82,19 @@ public class NotificationsController : ControllerBase
         await _db.SaveChangesAsync();
         return Ok(new ApiResponse<bool>(true, "Đã đánh dấu tất cả đã đọc."));
     }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteNotification(Guid id)
+    {
+        var userId = GetUserId();
+        var notification = await _db.Notifications.FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId);
+        if (notification is null)
+            return NotFound(new ApiResponse<bool>("Không tìm thấy thông báo."));
+
+        notification.IsDeleted = true;
+        await _db.SaveChangesAsync();
+        return Ok(new ApiResponse<bool>(true, "Đã xoá thông báo."));
+    }
 }
 
 public class NotificationDto

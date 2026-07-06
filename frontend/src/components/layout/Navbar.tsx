@@ -1,5 +1,5 @@
 import React from "react"
-import { Bell, Check, CheckCheck, Loader2, Menu } from "lucide-react"
+import { Bell, Check, CheckCheck, Loader2, Menu, Trash2 } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Sidebar } from "./Sidebar"
@@ -28,6 +28,7 @@ export function Navbar() {
   const [notifications, setNotifications] = React.useState<AppNotification[]>([])
   const [unreadCount, setUnreadCount] = React.useState(0)
   const [loadingNotifications, setLoadingNotifications] = React.useState(false)
+  const [expandedNotificationId, setExpandedNotificationId] = React.useState<string | null>(null)
 
   const refreshNotifications = React.useCallback(async () => {
     if (!accessToken) return
@@ -71,6 +72,12 @@ export function Navbar() {
 
   const markAllAsRead = async () => {
     await notificationService.markAllAsRead()
+    refreshNotifications()
+  }
+
+  const deleteNotification = async (id: string) => {
+    await notificationService.deleteNotification(id)
+    setExpandedNotificationId(current => current === id ? null : current)
     refreshNotifications()
   }
 
@@ -157,7 +164,12 @@ export function Navbar() {
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 glass p-2 mt-2">
+          <DropdownMenuContent
+            align="end"
+            sideOffset={8}
+            collisionPadding={12}
+            className="w-[calc(100vw-1.5rem)] max-w-[20rem] glass p-2"
+          >
             <div className="flex items-center justify-between px-3 py-2">
               <DropdownMenuLabel className="p-0 font-bold">Thông báo</DropdownMenuLabel>
               <button
@@ -178,25 +190,46 @@ export function Navbar() {
               <div className="px-3 py-8 text-center text-sm text-muted-foreground">Chưa có thông báo</div>
             ) : (
               <div className="max-h-96 space-y-1 overflow-y-auto">
-                {notifications.map(notification => (
-                  <div key={notification.id} className={`rounded-xl p-3 ${notification.isRead ? 'bg-transparent' : 'bg-primary/10'}`}>
+                {notifications.map(notification => {
+                  const isExpanded = expandedNotificationId === notification.id
+                  return (
+                  <div
+                    key={notification.id}
+                    onClick={() => setExpandedNotificationId(current => current === notification.id ? null : notification.id)}
+                    className={`rounded-xl p-3 transition ${notification.isRead ? 'bg-transparent' : 'bg-primary/10'}`}
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-bold leading-snug">{notification.title}</p>
                         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{notification.body}</p>
                       </div>
-                      {!notification.isRead && (
+                      <div className={`flex shrink-0 gap-1 ${isExpanded ? 'flex' : 'hidden sm:flex'}`}>
+                        {!notification.isRead && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              markAsRead(notification.id)
+                            }}
+                            title="Đánh dấu đã đọc"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-primary hover:bg-primary/10"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
-                          onClick={() => markAsRead(notification.id)}
-                          title="Đánh dấu đã đọc"
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-primary hover:bg-primary/10"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteNotification(notification.id)
+                          }}
+                          title="Xoá thông báo"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-destructive hover:bg-destructive/10"
                         >
-                          <Check className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" />
                         </button>
-                      )}
+                      </div>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             )}
           </DropdownMenuContent>

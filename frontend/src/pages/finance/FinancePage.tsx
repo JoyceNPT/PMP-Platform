@@ -332,6 +332,10 @@ export function FinancePage() {
              setTxDate(tx.transactionDate.split('T')[0]);
              setShowAdd(true);
           }}
+          onDelete={(id) => {
+            setDelTxId(id);
+            setShowDelTx(true);
+          }}
         />
       </div>
 
@@ -571,7 +575,7 @@ export function FinancePage() {
             await financeService.deleteTransaction(delTxId);
             toast.success('Đã xoá giao dịch');
             refreshSum();
-            window.location.reload(); 
+            setSharingVersion(v => v + 1);
           }
         }}
         title="Xoá giao dịch?"
@@ -993,7 +997,13 @@ function GoalCard({ goal, onDelete, onRefresh, onEdit }: { goal: import('@/servi
   );
 }
 
-function TransactionList({ month, year, onRefresh: _onRefresh, onEdit }: { month: number; year: number; onRefresh: () => void; onEdit: (tx: import('@/services/finance/financeService').Transaction) => void; }) {
+function TransactionList({ month, year, onRefresh: _onRefresh, onEdit, onDelete }: {
+  month: number;
+  year: number;
+  onRefresh: () => void;
+  onEdit: (tx: import('@/services/finance/financeService').Transaction) => void;
+  onDelete: (id: string) => void;
+}) {
   const { transactions, loading, refresh } = useTransactions({ month, year });
 
   if (loading) return <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
@@ -1027,7 +1037,7 @@ function TransactionList({ month, year, onRefresh: _onRefresh, onEdit }: { month
               <button onClick={() => onEdit(tx)} className="text-muted-foreground hover:text-primary">
                 <Edit className="h-3.5 w-3.5" />
               </button>
-              <button onClick={() => { setDelTxId(tx.id); setShowDelTx(true); }} className="text-muted-foreground hover:text-destructive">
+              <button onClick={() => onDelete(tx.id)} className="text-muted-foreground hover:text-destructive">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
