@@ -61,6 +61,22 @@ public enum SavingGoalStatus
     Cancelled = 2
 }
 
+public enum FinanceGroupMemberStatus
+{
+    Active = 0,
+    Left = 1,
+    Removed = 2
+}
+
+public enum FinanceGroupInviteStatus
+{
+    Pending = 0,
+    Accepted = 1,
+    Rejected = 2,
+    Cancelled = 3,
+    Expired = 4
+}
+
 public enum StorageType
 {
     Url = 0,

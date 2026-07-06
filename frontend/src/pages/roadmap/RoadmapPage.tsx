@@ -408,12 +408,12 @@ export function RoadmapPage() {
       <div className="animate-fade-in flex flex-col gap-6 h-full">
       
       {/* ── Header ── */}
-      <div className="flex items-center justify-between shrink-0">
-        <div>
+      <div className="flex shrink-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
           <h1 className="page-title">Lộ trình nghề nghiệp</h1>
           <p className="page-subtitle">Xây dựng kỹ năng và chinh phục mục tiêu sự nghiệp với AI</p>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
           {roadmap && (
             <>
               <button 
@@ -422,20 +422,22 @@ export function RoadmapPage() {
                   setCustomPrereqs([]);
                   setShowAddCustomNodeModal(true);
                 }}
-                className="flex items-center gap-2 h-9 px-4 rounded-xl bg-amber-500/10 text-amber-600 text-sm font-bold hover:bg-amber-500/20 transition border border-amber-500/20"
+                className="inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs font-bold leading-tight text-amber-600 transition hover:bg-amber-500/20 sm:h-9 sm:px-4 sm:text-sm"
               >
-                <Plus className="h-4 w-4" /> Thêm kỹ năng tự chọn
+                <Plus className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 whitespace-normal text-center sm:whitespace-nowrap">Thêm kỹ năng tự chọn</span>
               </button>
-              <button onClick={() => setShowDeleteModal(true)} className="h-9 px-3 rounded-xl border text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition">
+              <button onClick={() => setShowDeleteModal(true)} className="inline-flex h-full min-h-9 items-center justify-center rounded-xl border px-3 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive sm:h-9">
                 <Trash2 className="h-4 w-4" />
               </button>
             </>
           )}
           <button 
             onClick={() => setShowProfileModal(true)}
-            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-primary/10 text-primary text-sm font-bold hover:bg-primary/20 transition"
+            className="inline-flex min-w-0 items-center justify-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-xs font-bold leading-tight text-primary transition hover:bg-primary/20 sm:h-9 sm:px-4 sm:text-sm"
           >
-            <UserCircle className="h-4 w-4" /> Hồ sơ năng lực
+            <UserCircle className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 whitespace-normal text-center sm:whitespace-nowrap">Hồ sơ năng lực</span>
           </button>
         </div>
       </div>
@@ -533,43 +535,44 @@ export function RoadmapPage() {
 
       {/* ── Profile Summary ── */}
       {profile && !isFullscreen && (
-        <div className="grid grid-cols-4 gap-4 shrink-0">
+        <div className="grid shrink-0 grid-cols-1 gap-3 xl:grid-cols-4 xl:gap-4">
           <button 
             onClick={() => setShowProfileModal(true)}
-            className="col-span-1 bg-card rounded-2xl border p-4 space-y-2 text-left hover:border-primary hover:shadow-md transition-all group"
+            className="flex items-start justify-between gap-4 rounded-2xl border bg-card p-4 text-left transition-all hover:border-primary hover:shadow-md xl:col-span-1 xl:block xl:space-y-2 group"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex min-w-[112px] items-center gap-2 xl:justify-between">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Chuyên ngành</p>
               <Briefcase className="h-3 w-3 text-muted-foreground group-hover:text-primary" />
             </div>
-            <p className="font-bold text-sm truncate">{profile.major}</p>
+            <p className="min-w-0 flex-1 break-words text-right text-sm font-bold xl:truncate xl:text-left">{profile.major}</p>
           </button>
           
           <button 
             onClick={() => setShowProfileModal(true)}
-            className="col-span-1 bg-card rounded-2xl border p-4 space-y-2 text-left hover:border-primary hover:shadow-md transition-all group"
+            className="flex items-start justify-between gap-4 rounded-2xl border bg-card p-4 text-left transition-all hover:border-primary hover:shadow-md xl:col-span-1 xl:block xl:space-y-2 group"
           >
-             <div className="flex items-center justify-between">
+             <div className="flex min-w-[112px] items-center gap-2 xl:justify-between">
                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Kinh nghiệm</p>
                <Clock className="h-3 w-3 text-muted-foreground group-hover:text-primary" />
              </div>
-            <p className="font-bold text-sm">{profile.experienceYears || 0} năm làm việc</p>
+            <p className="min-w-0 flex-1 text-right text-sm font-bold xl:text-left">{profile.experienceYears || 0} năm làm việc</p>
           </button>
 
-          <div className="col-span-2 bg-card rounded-2xl border p-4">
-             <div className="flex items-center justify-between mb-2">
+          <div className="rounded-2xl border bg-card p-4 xl:col-span-2">
+             <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Kỹ năng hiện có</p>
-                <button onClick={() => setShowAddSkillModal(true)} className="h-6 w-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20">
+                <button onClick={() => setShowAddSkillModal(true)} className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary/10 px-2 text-xs font-bold text-primary hover:bg-primary/20 sm:h-6 sm:w-6 sm:px-0">
                   <Plus className="h-3 w-3" />
+                  <span className="sm:hidden">Thêm</span>
                 </button>
              </div>
-             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+             <div className="flex flex-wrap gap-2">
                 {profile.skills.filter(s => s.skillType === 0).map(s => (
-                  <span key={s.id} className="inline-flex items-center h-6 px-2 rounded-lg bg-muted text-[10px] font-bold whitespace-nowrap group relative">
-                    {s.skillName}
+                  <span key={s.id} className="group relative inline-flex min-h-7 max-w-full items-center rounded-lg bg-muted px-2 py-1 text-[10px] font-bold">
+                    <span className="min-w-0 break-words">{s.skillName}</span>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleDeleteSkill(s.id); }}
-                      className="ml-1 opacity-0 group-hover:opacity-100 text-destructive hover:scale-110 transition-all"
+                      className="ml-1 shrink-0 text-destructive opacity-100 transition-all hover:scale-110 sm:opacity-0 sm:group-hover:opacity-100"
                     >
                       <Trash2 className="h-2.5 w-2.5" />
                     </button>

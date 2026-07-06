@@ -109,13 +109,61 @@ public class FinanceController : ControllerBase
     }
 
     [HttpGet("ai-prediction")]
-    public async Task<IActionResult> GetAiPrediction([FromQuery] bool forceReload = false)
-        => Ok(await _financeService.GetAiPredictionAsync(GetUserId(), forceReload));
+    public async Task<IActionResult> GetAiPrediction([FromQuery] bool forceReload = false, [FromQuery] string scope = "group")
+        => Ok(await _financeService.GetAiPredictionAsync(GetUserId(), forceReload, scope));
 
     [HttpDelete("reset")]
     public async Task<IActionResult> ResetFinanceData()
     {
         var result = await _financeService.ResetFinanceDataAsync(GetUserId());
+        return result.Succeeded ? Ok(result) : BadRequest(result);
+    }
+
+    // ─── Sharing ─────────────────────────────────────────────────────────────
+
+    [HttpGet("sharing")]
+    public async Task<IActionResult> GetSharingOverview()
+        => Ok(await _financeService.GetSharingOverviewAsync(GetUserId()));
+
+    [HttpPost("sharing/invites")]
+    public async Task<IActionResult> CreateGroupInvite([FromBody] CreateFinanceInviteRequest req)
+    {
+        var result = await _financeService.CreateGroupInviteAsync(GetUserId(), req);
+        return result.Succeeded ? Ok(result) : BadRequest(result);
+    }
+
+    [HttpPost("sharing/invites/{id:guid}/accept")]
+    public async Task<IActionResult> AcceptGroupInvite(Guid id)
+    {
+        var result = await _financeService.AcceptGroupInviteAsync(GetUserId(), id);
+        return result.Succeeded ? Ok(result) : BadRequest(result);
+    }
+
+    [HttpPost("sharing/invites/{id:guid}/reject")]
+    public async Task<IActionResult> RejectGroupInvite(Guid id)
+    {
+        var result = await _financeService.RejectGroupInviteAsync(GetUserId(), id);
+        return result.Succeeded ? Ok(result) : BadRequest(result);
+    }
+
+    [HttpPost("sharing/invites/{id:guid}/cancel")]
+    public async Task<IActionResult> CancelGroupInvite(Guid id)
+    {
+        var result = await _financeService.CancelGroupInviteAsync(GetUserId(), id);
+        return result.Succeeded ? Ok(result) : BadRequest(result);
+    }
+
+    [HttpPost("sharing/leave")]
+    public async Task<IActionResult> LeaveActiveGroup()
+    {
+        var result = await _financeService.LeaveActiveGroupAsync(GetUserId());
+        return result.Succeeded ? Ok(result) : BadRequest(result);
+    }
+
+    [HttpPut("sharing/group")]
+    public async Task<IActionResult> UpdateActiveGroup([FromBody] UpdateFinanceGroupRequest req)
+    {
+        var result = await _financeService.UpdateActiveGroupAsync(GetUserId(), req);
         return result.Succeeded ? Ok(result) : BadRequest(result);
     }
 }

@@ -25,8 +25,17 @@ public interface IFinanceService
 
     // ─── Summary & AI ─────────────────────────────────────────────────────────
     Task<ApiResponse<MonthlySummaryDto>> GetMonthlySummaryAsync(Guid userId, int year, int month);
-    Task<ApiResponse<AiPredictionDto>> GetAiPredictionAsync(Guid userId, bool forceReload = false);
+    Task<ApiResponse<AiPredictionDto>> GetAiPredictionAsync(Guid userId, bool forceReload = false, string scope = "group");
 
     // ─── Reset ───────────────────────────────────────────────────────────────
     Task<ApiResponse<bool>> ResetFinanceDataAsync(Guid userId);
+
+    // ─── Sharing ─────────────────────────────────────────────────────────────
+    Task<ApiResponse<FinanceSharingOverviewDto>> GetSharingOverviewAsync(Guid userId);
+    Task<ApiResponse<FinanceGroupInviteDto>> CreateGroupInviteAsync(Guid userId, CreateFinanceInviteRequest request);
+    Task<ApiResponse<bool>> AcceptGroupInviteAsync(Guid userId, Guid inviteId);
+    Task<ApiResponse<bool>> RejectGroupInviteAsync(Guid userId, Guid inviteId);
+    Task<ApiResponse<bool>> CancelGroupInviteAsync(Guid userId, Guid inviteId);
+    Task<ApiResponse<bool>> LeaveActiveGroupAsync(Guid userId);
+    Task<ApiResponse<FinanceGroupDto>> UpdateActiveGroupAsync(Guid userId, UpdateFinanceGroupRequest request);
 }

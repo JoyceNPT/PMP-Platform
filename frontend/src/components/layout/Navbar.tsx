@@ -1,5 +1,5 @@
 import React from "react"
-import { Bell, Menu } from "lucide-react"
+import { Bell, Check, CheckCheck, Loader2, Menu } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Sidebar } from "./Sidebar"
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { CONFIG } from "@/config"
 import { Logo } from "@/components/shared/Logo"
 import apiClient from "@/services/apiClient"
+import { notificationHub, notificationService, type AppNotification } from "@/services/notificationService"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,9 +22,27 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export function Navbar() {
-  const { user, logout } = useAuthStore()
+  const { user, logout, accessToken } = useAuthStore()
   const { t } = useTranslation()
   const [announcement, setAnnouncement] = React.useState<string>("")
+  const [notifications, setNotifications] = React.useState<AppNotification[]>([])
+  const [unreadCount, setUnreadCount] = React.useState(0)
+  const [loadingNotifications, setLoadingNotifications] = React.useState(false)
+
+  const refreshNotifications = React.useCallback(async () => {
+    if (!accessToken) return
+    setLoadingNotifications(true)
+    try {
+      const [items, count] = await Promise.all([
+        notificationService.getNotifications(),
+        notificationService.getUnreadCount(),
+      ])
+      setNotifications(items)
+      setUnreadCount(count)
+    } finally {
+      setLoadingNotifications(false)
+    }
+  }, [accessToken])
 
   React.useEffect(() => {
     const fetchAnnouncement = async () => {
@@ -38,6 +57,22 @@ export function Navbar() {
     };
     fetchAnnouncement();
   }, []);
+
+  React.useEffect(() => {
+    if (!accessToken) return
+    refreshNotifications()
+    notificationHub.start(accessToken, refreshNotifications)
+  }, [accessToken, refreshNotifications])
+
+  const markAsRead = async (id: string) => {
+    await notificationService.markAsRead(id)
+    refreshNotifications()
+  }
+
+  const markAllAsRead = async () => {
+    await notificationService.markAllAsRead()
+    refreshNotifications()
+  }
 
   // User avatar initials
   const initials = user?.fullName
@@ -111,10 +146,61 @@ export function Navbar() {
       {/* Right: actions */}
       <div className="flex items-center gap-1 sm:gap-3 shrink-0">
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all">
-          <Bell className="h-[1.2rem] w-[1.2rem]" />
-          <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-primary border-2 border-background" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all">
+              <Bell className="h-[1.2rem] w-[1.2rem]" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-black text-primary-foreground">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80 glass p-2 mt-2">
+            <div className="flex items-center justify-between px-3 py-2">
+              <DropdownMenuLabel className="p-0 font-bold">Thông báo</DropdownMenuLabel>
+              <button
+                onClick={markAllAsRead}
+                disabled={unreadCount === 0}
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-primary hover:bg-primary/10 disabled:opacity-40"
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                Đã đọc tất cả
+              </button>
+            </div>
+            <DropdownMenuSeparator className="bg-border/50" />
+            {loadingNotifications ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            ) : notifications.length === 0 ? (
+              <div className="px-3 py-8 text-center text-sm text-muted-foreground">Chưa có thông báo</div>
+            ) : (
+              <div className="max-h-96 space-y-1 overflow-y-auto">
+                {notifications.map(notification => (
+                  <div key={notification.id} className={`rounded-xl p-3 ${notification.isRead ? 'bg-transparent' : 'bg-primary/10'}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold leading-snug">{notification.title}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{notification.body}</p>
+                      </div>
+                      {!notification.isRead && (
+                        <button
+                          onClick={() => markAsRead(notification.id)}
+                          title="Đánh dấu đã đọc"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-primary hover:bg-primary/10"
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <div className="h-6 w-px bg-border/50 mx-0.5 hidden sm:block" />
 

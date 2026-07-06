@@ -31,6 +31,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<SavingGoal> SavingGoals => Set<SavingGoal>();
     public DbSet<AiSpendingPrediction> AiSpendingPredictions => Set<AiSpendingPrediction>();
+    public DbSet<FinanceShareProfile> FinanceShareProfiles => Set<FinanceShareProfile>();
+    public DbSet<FinanceGroup> FinanceGroups => Set<FinanceGroup>();
+    public DbSet<FinanceGroupMember> FinanceGroupMembers => Set<FinanceGroupMember>();
+    public DbSet<FinanceGroupInvite> FinanceGroupInvites => Set<FinanceGroupInvite>();
 
     // ── Roadmap ───────────────────────────────────────────────────────────────
     public DbSet<UserCareerProfile> UserCareerProfiles => Set<UserCareerProfile>();
@@ -81,6 +85,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
         builder.Entity<FinanceCategory>().HasQueryFilter(f => !f.IsDeleted);
         builder.Entity<Transaction>().HasQueryFilter(t => !t.IsDeleted);
         builder.Entity<SavingGoal>().HasQueryFilter(s => !s.IsDeleted);
+        builder.Entity<FinanceShareProfile>().HasQueryFilter(f => !f.IsDeleted);
+        builder.Entity<FinanceGroup>().HasQueryFilter(f => !f.IsDeleted);
+        builder.Entity<FinanceGroupMember>().HasQueryFilter(f => !f.IsDeleted);
+        builder.Entity<FinanceGroupInvite>().HasQueryFilter(f => !f.IsDeleted);
         builder.Entity<UserCareerProfile>().HasQueryFilter(u => !u.IsDeleted);
         builder.Entity<UserSkill>().HasQueryFilter(u => !u.IsDeleted);
         builder.Entity<CareerRoadmap>().HasQueryFilter(c => !c.IsDeleted);

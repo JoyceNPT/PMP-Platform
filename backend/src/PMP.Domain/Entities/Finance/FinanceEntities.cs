@@ -1,4 +1,5 @@
 using PMP.Domain.Common;
+using PMP.Domain.Entities.Auth;
 using PMP.Domain.Enums;
 
 namespace PMP.Domain.Entities.Finance;
@@ -70,4 +71,56 @@ public class AiSpendingPrediction : BaseEntity
 
     /// <summary>Raw JSON response từ AI — dùng để debug & audit</summary>
     public string? RawResponse { get; set; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINANCE SHARE PROFILE
+// Mỗi user có một mã mời riêng để người khác gửi lời mời gộp tài chính.
+// ─────────────────────────────────────────────────────────────────────────────
+public class FinanceShareProfile : BaseEntity
+{
+    public Guid UserId { get; set; }
+    public string InviteCode { get; set; } = string.Empty;
+
+    public ApplicationUser User { get; set; } = null!;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINANCE GROUP
+// Nhóm gộp tài chính. Dữ liệu giao dịch vẫn nằm ở từng user, group chỉ quản lý
+// membership để query gom khi xem báo cáo/danh sách.
+// ─────────────────────────────────────────────────────────────────────────────
+public class FinanceGroup : BaseEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public Guid CreatedByUserId { get; set; }
+
+    public ICollection<FinanceGroupMember> Members { get; set; } = [];
+    public ICollection<FinanceGroupInvite> Invites { get; set; } = [];
+}
+
+public class FinanceGroupMember : BaseEntity
+{
+    public Guid FinanceGroupId { get; set; }
+    public Guid UserId { get; set; }
+    public FinanceGroupMemberStatus Status { get; set; } = FinanceGroupMemberStatus.Active;
+    public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? LeftAt { get; set; }
+
+    public FinanceGroup FinanceGroup { get; set; } = null!;
+    public ApplicationUser User { get; set; } = null!;
+}
+
+public class FinanceGroupInvite : BaseEntity
+{
+    public Guid FinanceGroupId { get; set; }
+    public Guid InviterUserId { get; set; }
+    public Guid InviteeUserId { get; set; }
+    public FinanceGroupInviteStatus Status { get; set; } = FinanceGroupInviteStatus.Pending;
+    public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddDays(7);
+    public DateTime? RespondedAt { get; set; }
+
+    public FinanceGroup FinanceGroup { get; set; } = null!;
+    public ApplicationUser InviterUser { get; set; } = null!;
+    public ApplicationUser InviteeUser { get; set; } = null!;
 }

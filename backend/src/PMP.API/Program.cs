@@ -218,5 +218,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
+app.MapHub<FinanceHub>("/hubs/finance");
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();

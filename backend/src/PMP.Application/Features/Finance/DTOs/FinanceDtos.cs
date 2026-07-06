@@ -31,6 +31,8 @@ public class UpdateCategoryRequest
 public class TransactionDto
 {
     public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public string OwnerName { get; set; } = string.Empty;
     public Guid CategoryId { get; set; }
     public string CategoryName { get; set; } = string.Empty;
     public string? CategoryIcon { get; set; }
@@ -145,4 +147,55 @@ public class AiPredictionDto
     public decimal? Confidence { get; set; }
     public string Insight { get; set; } = string.Empty;
     public string Month { get; set; } = string.Empty;
+}
+
+// ─── Finance Sharing ────────────────────────────────────────────────────────
+
+public class FinanceSharingOverviewDto
+{
+    public string InviteCode { get; set; } = string.Empty;
+    public FinanceGroupDto? ActiveGroup { get; set; }
+    public List<FinanceGroupInviteDto> IncomingInvites { get; set; } = [];
+    public List<FinanceGroupInviteDto> OutgoingInvites { get; set; } = [];
+}
+
+public class FinanceGroupDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public Guid CreatedByUserId { get; set; }
+    public List<FinanceGroupMemberDto> Members { get; set; } = [];
+}
+
+public class FinanceGroupMemberDto
+{
+    public Guid UserId { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public int Status { get; set; }
+    public DateTime JoinedAt { get; set; }
+}
+
+public class FinanceGroupInviteDto
+{
+    public Guid Id { get; set; }
+    public Guid FinanceGroupId { get; set; }
+    public string GroupName { get; set; } = string.Empty;
+    public Guid InviterUserId { get; set; }
+    public string InviterName { get; set; } = string.Empty;
+    public Guid InviteeUserId { get; set; }
+    public string InviteeName { get; set; } = string.Empty;
+    public int Status { get; set; }
+    public DateTime ExpiresAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class CreateFinanceInviteRequest
+{
+    public string InviteCode { get; set; } = string.Empty;
+}
+
+public class UpdateFinanceGroupRequest
+{
+    public string Name { get; set; } = string.Empty;
 }

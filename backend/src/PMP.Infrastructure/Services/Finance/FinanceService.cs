@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 using PMP.Application.Features.Finance.DTOs;
 using PMP.Application.Features.Finance.Interfaces;
+using PMP.Domain.Entities.Auth;
 using PMP.Domain.Entities.Finance;
 using PMP.Domain.Enums;
+using PMP.Infrastructure.Hubs;
 using PMP.Infrastructure.Persistence;
 using PMP.Infrastructure.Services.System;
 using PMP.Shared.Wrappers;
@@ -14,11 +17,19 @@ public class FinanceService : IFinanceService
 {
     private readonly ApplicationDbContext _db;
     private readonly IAiService _aiService;
+    private readonly IHubContext<FinanceHub> _financeHub;
+    private readonly IHubContext<NotificationHub> _notificationHub;
 
-    public FinanceService(ApplicationDbContext db, IAiService aiService)
+    public FinanceService(
+        ApplicationDbContext db,
+        IAiService aiService,
+        IHubContext<FinanceHub> financeHub,
+        IHubContext<NotificationHub> notificationHub)
     {
         _db = db;
         _aiService = aiService;
+        _financeHub = financeHub;
+        _notificationHub = notificationHub;
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -32,9 +43,14 @@ public class FinanceService : IFinanceService
         Icon     = c.Icon
     };
 
-    private static TransactionDto MapTransaction(Transaction t) => new()
+    private static string DisplayName(ApplicationUser? user)
+        => user?.FullName?.Trim().Length > 0 ? user.FullName : user?.Email ?? "Người dùng";
+
+    private static TransactionDto MapTransaction(Transaction t, IReadOnlyDictionary<Guid, string>? ownerNames = null) => new()
     {
         Id              = t.Id,
+        OwnerUserId     = t.UserId,
+        OwnerName       = ownerNames is not null && ownerNames.TryGetValue(t.UserId, out var ownerName) ? ownerName : "",
         CategoryId      = t.CategoryId,
         CategoryName    = t.Category?.Name ?? "",
         CategoryIcon    = t.Category?.Icon,
@@ -44,6 +60,175 @@ public class FinanceService : IFinanceService
         TransactionDate = t.TransactionDate,
         Note            = t.Note
     };
+
+    private static FinanceGroupMemberDto MapMember(FinanceGroupMember m) => new()
+    {
+        UserId      = m.UserId,
+        DisplayName = DisplayName(m.User),
+        Email       = m.User.Email,
+        Status      = (int)m.Status,
+        JoinedAt    = m.JoinedAt
+    };
+
+    private static FinanceGroupDto MapGroup(FinanceGroup g) => new()
+    {
+        Id              = g.Id,
+        Name            = g.Name,
+        CreatedByUserId = g.CreatedByUserId,
+        Members         = g.Members
+            .Where(m => m.Status == FinanceGroupMemberStatus.Active)
+            .OrderBy(m => m.JoinedAt)
+            .Select(MapMember)
+            .ToList()
+    };
+
+    private static FinanceGroupInviteDto MapInvite(FinanceGroupInvite i) => new()
+    {
+        Id             = i.Id,
+        FinanceGroupId = i.FinanceGroupId,
+        GroupName      = i.FinanceGroup.Name,
+        InviterUserId  = i.InviterUserId,
+        InviterName    = DisplayName(i.InviterUser),
+        InviteeUserId  = i.InviteeUserId,
+        InviteeName    = DisplayName(i.InviteeUser),
+        Status         = (int)i.Status,
+        ExpiresAt      = i.ExpiresAt,
+        CreatedAt      = i.CreatedAt
+    };
+
+    private async Task<List<Guid>> GetFinanceUserScopeAsync(Guid userId)
+    {
+        var activeGroupId = await _db.FinanceGroupMembers
+            .Where(m => m.UserId == userId && m.Status == FinanceGroupMemberStatus.Active)
+            .Select(m => (Guid?)m.FinanceGroupId)
+            .FirstOrDefaultAsync();
+
+        if (activeGroupId is null)
+            return [userId];
+
+        return await _db.FinanceGroupMembers
+            .Where(m => m.FinanceGroupId == activeGroupId && m.Status == FinanceGroupMemberStatus.Active)
+            .Select(m => m.UserId)
+            .Distinct()
+            .ToListAsync();
+    }
+
+    private async Task<Guid?> GetActiveGroupIdAsync(Guid userId)
+        => await _db.FinanceGroupMembers
+            .Where(m => m.UserId == userId && m.Status == FinanceGroupMemberStatus.Active)
+            .Select(m => (Guid?)m.FinanceGroupId)
+            .FirstOrDefaultAsync();
+
+    private async Task<Dictionary<Guid, string>> GetOwnerNamesAsync(IEnumerable<Guid> userIds)
+    {
+        var ids = userIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return [];
+
+        var users = await _db.Users
+            .Where(u => ids.Contains(u.Id))
+            .Select(u => new { u.Id, u.FullName, u.Email })
+            .ToListAsync();
+
+        return users.ToDictionary(
+            u => u.Id,
+            u => !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Email ?? "Người dùng");
+    }
+
+    private async Task NotifyFinanceTransactionCreatedAsync(Guid actorUserId, Transaction tx)
+    {
+        var groupId = await GetActiveGroupIdAsync(actorUserId);
+        if (groupId is null)
+            return;
+
+        var members = await _db.FinanceGroupMembers
+            .Include(m => m.User)
+            .Where(m => m.FinanceGroupId == groupId && m.Status == FinanceGroupMemberStatus.Active)
+            .ToListAsync();
+
+        if (members.Count <= 1)
+            return;
+
+        var actor = members.FirstOrDefault(m => m.UserId == actorUserId)?.User;
+        var actorName = DisplayName(actor);
+        var typeLabel = tx.Type == TransactionType.Income ? "khoản thu" : "khoản chi";
+        var amount = tx.Amount.ToString("N0");
+
+        var notifications = members.Select(member => new PMP.Domain.Entities.System.Notification
+        {
+            UserId = member.UserId,
+            Type = NotificationType.Finance,
+            Title = "Tài chính gộp có giao dịch mới",
+            Body = $"{actorName} vừa tạo {typeLabel} {amount}đ trong nhóm tài chính."
+        }).ToList();
+
+        _db.Notifications.AddRange(notifications);
+        await _db.SaveChangesAsync();
+
+        foreach (var notification in notifications)
+        {
+            await _notificationHub.Clients.Group(notification.UserId.ToString()).SendAsync("NotificationReceived", new
+            {
+                notification.Id,
+                notification.Title,
+                notification.Body,
+                Type = (int)notification.Type,
+                notification.IsRead,
+                notification.CreatedAt,
+                notification.ReadAt
+            });
+        }
+    }
+
+    private async Task<FinanceShareProfile> EnsureShareProfileAsync(Guid userId)
+    {
+        var profile = await _db.FinanceShareProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (profile is not null)
+            return profile;
+
+        string code;
+        do
+        {
+            code = $"FIN-{Random.Shared.Next(100000, 999999)}";
+        } while (await _db.FinanceShareProfiles.AnyAsync(p => p.InviteCode == code));
+
+        profile = new FinanceShareProfile
+        {
+            UserId = userId,
+            InviteCode = code
+        };
+
+        _db.FinanceShareProfiles.Add(profile);
+        await _db.SaveChangesAsync();
+        return profile;
+    }
+
+    private async Task<FinanceGroup> EnsureActiveGroupAsync(Guid userId)
+    {
+        var existing = await _db.FinanceGroups
+            .Include(g => g.Members).ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(g => g.Members.Any(m => m.UserId == userId && m.Status == FinanceGroupMemberStatus.Active));
+
+        if (existing is not null)
+            return existing;
+
+        var user = await _db.Users.FirstAsync(u => u.Id == userId);
+        var group = new FinanceGroup
+        {
+            CreatedByUserId = userId,
+            Name = $"Tài chính gộp của {DisplayName(user)}"
+        };
+
+        group.Members.Add(new FinanceGroupMember
+        {
+            UserId = userId,
+            Status = FinanceGroupMemberStatus.Active
+        });
+
+        _db.FinanceGroups.Add(group);
+        await _db.SaveChangesAsync();
+        return group;
+    }
 
     private static SavingGoalDto MapGoal(SavingGoal g) => new()
     {
@@ -109,9 +294,10 @@ public class FinanceService : IFinanceService
 
     public async Task<ApiResponse<List<TransactionDto>>> GetTransactionsAsync(Guid userId, TransactionQueryParams q)
     {
+        var scopeUserIds = await GetFinanceUserScopeAsync(userId);
         var query = _db.Transactions
             .Include(t => t.Category)
-            .Where(t => t.UserId == userId);
+            .Where(t => scopeUserIds.Contains(t.UserId));
 
         if (q.Month.HasValue && q.Year.HasValue)
             query = query.Where(t => t.TransactionDate.Month == q.Month && t.TransactionDate.Year == q.Year);
@@ -131,13 +317,15 @@ public class FinanceService : IFinanceService
             .Take(q.PageSize)
             .ToListAsync();
 
-        return new ApiResponse<List<TransactionDto>>(data.Select(MapTransaction).ToList());
+        var ownerNames = await GetOwnerNamesAsync(data.Select(t => t.UserId));
+        return new ApiResponse<List<TransactionDto>>(data.Select(t => MapTransaction(t, ownerNames)).ToList());
     }
 
     public async Task<ApiResponse<TransactionDto>> CreateTransactionAsync(Guid userId, CreateTransactionRequest req)
     {
         var cat = await _db.FinanceCategories.FirstOrDefaultAsync(c => c.Id == req.CategoryId && c.UserId == userId);
         if (cat is null) return new ApiResponse<TransactionDto>("Danh mục không hợp lệ.");
+        var userNames = await GetOwnerNamesAsync([userId]);
 
         var tx = new Transaction
         {
@@ -151,7 +339,8 @@ public class FinanceService : IFinanceService
         tx.Category = cat;
         _db.Transactions.Add(tx);
         await _db.SaveChangesAsync();
-        return new ApiResponse<TransactionDto>(MapTransaction(tx), "Đã thêm giao dịch.");
+        await NotifyFinanceTransactionCreatedAsync(userId, tx);
+        return new ApiResponse<TransactionDto>(MapTransaction(tx, userNames), "Đã thêm giao dịch.");
     }
 
     public async Task<ApiResponse<TransactionDto>> UpdateTransactionAsync(Guid userId, Guid txId, UpdateTransactionRequest req)
@@ -168,7 +357,8 @@ public class FinanceService : IFinanceService
 
         // reload category
         tx.Category = await _db.FinanceCategories.FindAsync(req.CategoryId) ?? tx.Category;
-        return new ApiResponse<TransactionDto>(MapTransaction(tx), "Đã cập nhật giao dịch.");
+        var userNames = await GetOwnerNamesAsync([userId]);
+        return new ApiResponse<TransactionDto>(MapTransaction(tx, userNames), "Đã cập nhật giao dịch.");
     }
 
     public async Task<ApiResponse<bool>> DeleteTransactionAsync(Guid userId, Guid txId)
@@ -231,9 +421,10 @@ public class FinanceService : IFinanceService
 
     public async Task<ApiResponse<MonthlySummaryDto>> GetMonthlySummaryAsync(Guid userId, int year, int month)
     {
+        var scopeUserIds = await GetFinanceUserScopeAsync(userId);
         var txs = await _db.Transactions
             .Include(t => t.Category)
-            .Where(t => t.UserId == userId && t.TransactionDate.Year == year && t.TransactionDate.Month == month)
+            .Where(t => scopeUserIds.Contains(t.UserId) && t.TransactionDate.Year == year && t.TransactionDate.Month == month)
             .ToListAsync();
 
         var income  = txs.Where(t => t.Type == TransactionType.Income).ToList();
@@ -284,7 +475,7 @@ public class FinanceService : IFinanceService
         {
             var d = new DateOnly(year, month, 1).AddMonths(-i);
             var monthTxs = await _db.Transactions
-                .Where(t => t.UserId == userId && t.TransactionDate.Year == d.Year && t.TransactionDate.Month == d.Month)
+                .Where(t => scopeUserIds.Contains(t.UserId) && t.TransactionDate.Year == d.Year && t.TransactionDate.Month == d.Month)
                 .ToListAsync();
             trend.Add(new MonthlyTrendDto
             {
@@ -311,13 +502,15 @@ public class FinanceService : IFinanceService
 
     // ─── AI Prediction (Real Gemini Integration) ─────────────────────────────
 
-    public async Task<ApiResponse<AiPredictionDto>> GetAiPredictionAsync(Guid userId, bool forceReload = false)
+    public async Task<ApiResponse<AiPredictionDto>> GetAiPredictionAsync(Guid userId, bool forceReload = false, string scope = "group")
     {
         var now = DateTime.UtcNow;
         var predictionMonth = DateOnly.FromDateTime(new DateTime(now.Year, now.Month, 1).AddMonths(1));
+        var useGroupScope = scope.Equals("group", StringComparison.OrdinalIgnoreCase);
+        var scopeUserIds = useGroupScope ? await GetFinanceUserScopeAsync(userId) : new List<Guid> { userId };
 
         // 1. Check existing prediction if not forced
-        if (!forceReload)
+        if (!forceReload && !useGroupScope)
         {
             var existing = await _db.AiSpendingPredictions
                 .FirstOrDefaultAsync(p => p.UserId == userId && p.PredictionMonth == predictionMonth);
@@ -337,11 +530,11 @@ public class FinanceService : IFinanceService
         // 2. Fetch context for AI
         var last3Months = await _db.Transactions
             .Include(t => t.Category)
-            .Where(t => t.UserId == userId && t.TransactionDate >= DateOnly.FromDateTime(now.AddMonths(-3)))
+            .Where(t => scopeUserIds.Contains(t.UserId) && t.TransactionDate >= DateOnly.FromDateTime(now.AddMonths(-3)))
             .ToListAsync();
 
         var activeGoals = await _db.SavingGoals
-            .Where(g => g.UserId == userId && g.Status == SavingGoalStatus.InProgress)
+            .Where(g => scopeUserIds.Contains(g.UserId) && g.Status == SavingGoalStatus.InProgress)
             .ToListAsync();
 
         if (last3Months.Count < 5)
@@ -351,7 +544,9 @@ public class FinanceService : IFinanceService
                 PredictedAmount = 0,
                 Confidence      = 0,
                 Month           = $"Th.{predictionMonth.Month}/{predictionMonth.Year}",
-                Insight         = "Bạn cần ghi chép thêm ít nhất 5 giao dịch để AI có thể phân tích và đưa ra lời khuyên chính xác."
+                Insight         = useGroupScope
+                    ? "Nhóm cần ghi chép thêm ít nhất 5 giao dịch để AI có thể phân tích tài chính gộp chính xác."
+                    : "Bạn cần ghi chép thêm ít nhất 5 giao dịch để AI có thể phân tích và đưa ra lời khuyên chính xác."
             });
         }
 
@@ -366,7 +561,7 @@ public class FinanceService : IFinanceService
         var goalsStr = string.Join("\n", activeGoals.Select(g => $"- {g.Name}: {g.CurrentAmount:N0}/{g.TargetAmount:N0}đ"));
 
         var prompt = $@"
-            Dựa trên dữ liệu tài chính của tôi trong 3 tháng qua:
+            Dựa trên dữ liệu tài chính {(useGroupScope ? "gộp của nhóm" : "cá nhân của tôi")} trong 3 tháng qua:
             - Tổng thu nhập: {income:N0}đ
             - Tổng chi tiêu: {expense:N0}đ
             - Chi tiêu theo hạng mục:
@@ -394,7 +589,13 @@ public class FinanceService : IFinanceService
         if (aiResult == null)
             return new ApiResponse<AiPredictionDto>("AI hiện không phản hồi, vui lòng thử lại sau.");
 
-        // 4. Save to DB
+        if (useGroupScope)
+        {
+            aiResult.Month = $"Th.{predictionMonth.Month}/{predictionMonth.Year}";
+            return new ApiResponse<AiPredictionDto>(aiResult, "Cập nhật gợi ý AI cho tài chính gộp thành công.");
+        }
+
+        // 4. Save personal prediction to DB
         var dbPrediction = await _db.AiSpendingPredictions
             .FirstOrDefaultAsync(p => p.UserId == userId && p.PredictionMonth == predictionMonth);
 
@@ -433,5 +634,249 @@ public class FinanceService : IFinanceService
 
         await _db.SaveChangesAsync();
         return new ApiResponse<bool>(true, "Đã xoá toàn bộ dữ liệu tài chính.");
+    }
+
+    // ─── Sharing ─────────────────────────────────────────────────────────────
+
+    public async Task<ApiResponse<FinanceSharingOverviewDto>> GetSharingOverviewAsync(Guid userId)
+    {
+        var shareProfile = await EnsureShareProfileAsync(userId);
+
+        var activeGroup = await _db.FinanceGroups
+            .Include(g => g.Members).ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(g => g.Members.Any(m => m.UserId == userId && m.Status == FinanceGroupMemberStatus.Active));
+
+        var incoming = await _db.FinanceGroupInvites
+            .Include(i => i.FinanceGroup)
+            .Include(i => i.InviterUser)
+            .Include(i => i.InviteeUser)
+            .Where(i => i.InviteeUserId == userId && i.Status == FinanceGroupInviteStatus.Pending && i.ExpiresAt > DateTime.UtcNow)
+            .OrderByDescending(i => i.CreatedAt)
+            .ToListAsync();
+
+        var outgoing = await _db.FinanceGroupInvites
+            .Include(i => i.FinanceGroup)
+            .Include(i => i.InviterUser)
+            .Include(i => i.InviteeUser)
+            .Where(i => i.InviterUserId == userId && i.Status == FinanceGroupInviteStatus.Pending && i.ExpiresAt > DateTime.UtcNow)
+            .OrderByDescending(i => i.CreatedAt)
+            .ToListAsync();
+
+        return new ApiResponse<FinanceSharingOverviewDto>(new FinanceSharingOverviewDto
+        {
+            InviteCode = shareProfile.InviteCode,
+            ActiveGroup = activeGroup is null ? null : MapGroup(activeGroup),
+            IncomingInvites = incoming.Select(MapInvite).ToList(),
+            OutgoingInvites = outgoing.Select(MapInvite).ToList()
+        });
+    }
+
+    public async Task<ApiResponse<FinanceGroupInviteDto>> CreateGroupInviteAsync(Guid userId, CreateFinanceInviteRequest request)
+    {
+        var inviteCode = request.InviteCode.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(inviteCode))
+            return new ApiResponse<FinanceGroupInviteDto>("Vui lòng nhập mã mời.");
+
+        var inviteeProfile = await _db.FinanceShareProfiles.FirstOrDefaultAsync(p => p.InviteCode == inviteCode);
+        if (inviteeProfile is null)
+            return new ApiResponse<FinanceGroupInviteDto>("Mã mời không tồn tại.");
+
+        if (inviteeProfile.UserId == userId)
+            return new ApiResponse<FinanceGroupInviteDto>("Không thể tự mời chính mình.");
+
+        var group = await EnsureActiveGroupAsync(userId);
+
+        var alreadyMember = await _db.FinanceGroupMembers
+            .AnyAsync(m => m.FinanceGroupId == group.Id && m.UserId == inviteeProfile.UserId && m.Status == FinanceGroupMemberStatus.Active);
+        if (alreadyMember)
+            return new ApiResponse<FinanceGroupInviteDto>("Người này đã ở trong nhóm tài chính.");
+
+        var pending = await _db.FinanceGroupInvites
+            .AnyAsync(i => i.FinanceGroupId == group.Id
+                && i.InviteeUserId == inviteeProfile.UserId
+                && i.Status == FinanceGroupInviteStatus.Pending
+                && i.ExpiresAt > DateTime.UtcNow);
+        if (pending)
+            return new ApiResponse<FinanceGroupInviteDto>("Đã có lời mời đang chờ phản hồi.");
+
+        var invite = new FinanceGroupInvite
+        {
+            FinanceGroupId = group.Id,
+            InviterUserId = userId,
+            InviteeUserId = inviteeProfile.UserId,
+            Status = FinanceGroupInviteStatus.Pending,
+            ExpiresAt = DateTime.UtcNow.AddDays(7)
+        };
+
+        _db.FinanceGroupInvites.Add(invite);
+        await _db.SaveChangesAsync();
+
+        invite = await _db.FinanceGroupInvites
+            .Include(i => i.FinanceGroup)
+            .Include(i => i.InviterUser)
+            .Include(i => i.InviteeUser)
+            .FirstAsync(i => i.Id == invite.Id);
+
+        var dto = MapInvite(invite);
+        await _financeHub.Clients.Group(invite.InviteeUserId.ToString()).SendAsync("FinanceInviteReceived", dto);
+        await _financeHub.Clients.Group(invite.InviterUserId.ToString()).SendAsync("FinanceSharingChanged");
+
+        return new ApiResponse<FinanceGroupInviteDto>(dto, "Đã gửi lời mời gộp tài chính.");
+    }
+
+    public async Task<ApiResponse<bool>> AcceptGroupInviteAsync(Guid userId, Guid inviteId)
+    {
+        var invite = await _db.FinanceGroupInvites
+            .Include(i => i.FinanceGroup)
+            .ThenInclude(g => g.Members)
+            .FirstOrDefaultAsync(i => i.Id == inviteId && i.InviteeUserId == userId);
+
+        if (invite is null)
+            return new ApiResponse<bool>("Không tìm thấy lời mời.");
+
+        if (invite.Status != FinanceGroupInviteStatus.Pending || invite.ExpiresAt <= DateTime.UtcNow)
+            return new ApiResponse<bool>("Lời mời không còn hiệu lực.");
+
+        var currentActiveMember = await _db.FinanceGroupMembers
+            .FirstOrDefaultAsync(m => m.UserId == userId && m.Status == FinanceGroupMemberStatus.Active);
+        if (currentActiveMember is not null && currentActiveMember.FinanceGroupId != invite.FinanceGroupId)
+            return new ApiResponse<bool>("Bạn đang ở trong một nhóm tài chính khác. Vui lòng rời nhóm hiện tại trước.");
+
+        var member = await _db.FinanceGroupMembers
+            .FirstOrDefaultAsync(m => m.FinanceGroupId == invite.FinanceGroupId && m.UserId == userId);
+
+        if (member is null)
+        {
+            _db.FinanceGroupMembers.Add(new FinanceGroupMember
+            {
+                FinanceGroupId = invite.FinanceGroupId,
+                UserId = userId,
+                Status = FinanceGroupMemberStatus.Active
+            });
+        }
+        else
+        {
+            member.Status = FinanceGroupMemberStatus.Active;
+            member.JoinedAt = DateTime.UtcNow;
+            member.LeftAt = null;
+        }
+
+        invite.Status = FinanceGroupInviteStatus.Accepted;
+        invite.RespondedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        await NotifyGroupChangedAsync(invite.FinanceGroupId);
+        await _financeHub.Clients.Group(invite.InviterUserId.ToString()).SendAsync("FinanceInviteAccepted", inviteId);
+        await _financeHub.Clients.Group(userId.ToString()).SendAsync("FinanceSharingChanged");
+
+        return new ApiResponse<bool>(true, "Đã chấp nhận lời mời gộp tài chính.");
+    }
+
+    public async Task<ApiResponse<bool>> RejectGroupInviteAsync(Guid userId, Guid inviteId)
+    {
+        var invite = await _db.FinanceGroupInvites.FirstOrDefaultAsync(i => i.Id == inviteId && i.InviteeUserId == userId);
+        if (invite is null)
+            return new ApiResponse<bool>("Không tìm thấy lời mời.");
+
+        invite.Status = FinanceGroupInviteStatus.Rejected;
+        invite.RespondedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        await _financeHub.Clients.Group(invite.InviterUserId.ToString()).SendAsync("FinanceInviteRejected", inviteId);
+        await _financeHub.Clients.Group(userId.ToString()).SendAsync("FinanceSharingChanged");
+
+        return new ApiResponse<bool>(true, "Đã từ chối lời mời.");
+    }
+
+    public async Task<ApiResponse<bool>> CancelGroupInviteAsync(Guid userId, Guid inviteId)
+    {
+        var invite = await _db.FinanceGroupInvites.FirstOrDefaultAsync(i => i.Id == inviteId && i.InviterUserId == userId);
+        if (invite is null)
+            return new ApiResponse<bool>("Không tìm thấy lời mời.");
+
+        invite.Status = FinanceGroupInviteStatus.Cancelled;
+        invite.RespondedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        await _financeHub.Clients.Group(invite.InviteeUserId.ToString()).SendAsync("FinanceSharingChanged");
+        await _financeHub.Clients.Group(userId.ToString()).SendAsync("FinanceSharingChanged");
+
+        return new ApiResponse<bool>(true, "Đã huỷ lời mời.");
+    }
+
+    public async Task<ApiResponse<bool>> LeaveActiveGroupAsync(Guid userId)
+    {
+        var member = await _db.FinanceGroupMembers
+            .FirstOrDefaultAsync(m => m.UserId == userId && m.Status == FinanceGroupMemberStatus.Active);
+
+        if (member is null)
+            return new ApiResponse<bool>("Bạn chưa tham gia nhóm tài chính nào.");
+
+        member.Status = FinanceGroupMemberStatus.Left;
+        member.LeftAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        var groupId = member.FinanceGroupId;
+        var hasActiveMembers = await _db.FinanceGroupMembers
+            .AnyAsync(m => m.FinanceGroupId == groupId && m.Status == FinanceGroupMemberStatus.Active);
+
+        if (!hasActiveMembers)
+        {
+            var group = await _db.FinanceGroups
+                .Include(g => g.Members)
+                .Include(g => g.Invites)
+                .FirstOrDefaultAsync(g => g.Id == groupId);
+
+            if (group is not null)
+            {
+                _db.FinanceGroupInvites.RemoveRange(group.Invites);
+                _db.FinanceGroupMembers.RemoveRange(group.Members);
+                _db.FinanceGroups.Remove(group);
+                await _db.SaveChangesAsync();
+            }
+        }
+        else
+        {
+            await NotifyGroupChangedAsync(groupId);
+        }
+
+        await _financeHub.Clients.Group(userId.ToString()).SendAsync("FinanceSharingChanged");
+
+        return new ApiResponse<bool>(true, "Đã rời nhóm tài chính.");
+    }
+
+    public async Task<ApiResponse<FinanceGroupDto>> UpdateActiveGroupAsync(Guid userId, UpdateFinanceGroupRequest request)
+    {
+        var name = request.Name.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            return new ApiResponse<FinanceGroupDto>("Tên tài khoản gộp không được để trống.");
+
+        var group = await _db.FinanceGroups
+            .Include(g => g.Members).ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(g => g.Members.Any(m => m.UserId == userId && m.Status == FinanceGroupMemberStatus.Active));
+
+        if (group is null)
+            return new ApiResponse<FinanceGroupDto>("Bạn chưa tham gia nhóm tài chính nào.");
+
+        group.Name = name;
+        await _db.SaveChangesAsync();
+        await NotifyGroupChangedAsync(group.Id);
+
+        return new ApiResponse<FinanceGroupDto>(MapGroup(group), "Đã cập nhật tên tài khoản gộp.");
+    }
+
+    private async Task NotifyGroupChangedAsync(Guid groupId)
+    {
+        var userIds = await _db.FinanceGroupMembers
+            .IgnoreQueryFilters()
+            .Where(m => m.FinanceGroupId == groupId)
+            .Select(m => m.UserId)
+            .Distinct()
+            .ToListAsync();
+
+        foreach (var id in userIds)
+        {
+            await _financeHub.Clients.Group(id.ToString()).SendAsync("FinanceSharingChanged");
+        }
     }
 }

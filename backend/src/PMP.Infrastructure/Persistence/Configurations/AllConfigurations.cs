@@ -176,6 +176,94 @@ public class AiSpendingPredictionConfiguration : IEntityTypeConfiguration<AiSpen
     }
 }
 
+public class FinanceShareProfileConfiguration : IEntityTypeConfiguration<FinanceShareProfile>
+{
+    public void Configure(EntityTypeBuilder<FinanceShareProfile> builder)
+    {
+        builder.ToTable("FinanceShareProfiles");
+        builder.HasKey(f => f.Id);
+
+        builder.Property(f => f.InviteCode).IsRequired().HasMaxLength(16);
+        builder.Property(f => f.IsDeleted).HasDefaultValue(false);
+
+        builder.HasIndex(f => f.UserId).IsUnique();
+        builder.HasIndex(f => f.InviteCode).IsUnique();
+
+        builder.HasOne(f => f.User)
+            .WithMany()
+            .HasForeignKey(f => f.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class FinanceGroupConfiguration : IEntityTypeConfiguration<FinanceGroup>
+{
+    public void Configure(EntityTypeBuilder<FinanceGroup> builder)
+    {
+        builder.ToTable("FinanceGroups");
+        builder.HasKey(f => f.Id);
+
+        builder.Property(f => f.Name).IsRequired().HasMaxLength(120);
+        builder.Property(f => f.IsDeleted).HasDefaultValue(false);
+
+        builder.HasIndex(f => f.CreatedByUserId);
+    }
+}
+
+public class FinanceGroupMemberConfiguration : IEntityTypeConfiguration<FinanceGroupMember>
+{
+    public void Configure(EntityTypeBuilder<FinanceGroupMember> builder)
+    {
+        builder.ToTable("FinanceGroupMembers");
+        builder.HasKey(f => f.Id);
+
+        builder.Property(f => f.IsDeleted).HasDefaultValue(false);
+
+        builder.HasIndex(f => new { f.UserId, f.Status });
+        builder.HasIndex(f => new { f.FinanceGroupId, f.UserId }).IsUnique();
+
+        builder.HasOne(f => f.FinanceGroup)
+            .WithMany(g => g.Members)
+            .HasForeignKey(f => f.FinanceGroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(f => f.User)
+            .WithMany()
+            .HasForeignKey(f => f.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class FinanceGroupInviteConfiguration : IEntityTypeConfiguration<FinanceGroupInvite>
+{
+    public void Configure(EntityTypeBuilder<FinanceGroupInvite> builder)
+    {
+        builder.ToTable("FinanceGroupInvites");
+        builder.HasKey(f => f.Id);
+
+        builder.Property(f => f.IsDeleted).HasDefaultValue(false);
+
+        builder.HasIndex(f => new { f.InviteeUserId, f.Status });
+        builder.HasIndex(f => new { f.InviterUserId, f.Status });
+        builder.HasIndex(f => new { f.FinanceGroupId, f.InviteeUserId, f.Status });
+
+        builder.HasOne(f => f.FinanceGroup)
+            .WithMany(g => g.Invites)
+            .HasForeignKey(f => f.FinanceGroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(f => f.InviterUser)
+            .WithMany()
+            .HasForeignKey(f => f.InviterUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(f => f.InviteeUser)
+            .WithMany()
+            .HasForeignKey(f => f.InviteeUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // ROADMAP CONFIGURATIONS
 // ══════════════════════════════════════════════════════════════════════════════

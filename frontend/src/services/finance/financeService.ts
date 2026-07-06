@@ -1,4 +1,6 @@
 import apiClient from '@/services/apiClient';
+import * as signalR from '@microsoft/signalr';
+import { CONFIG } from '@/config';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -12,6 +14,8 @@ export interface FinanceCategory {
 
 export interface Transaction {
   id: string;
+  ownerUserId: string;
+  ownerName: string;
   categoryId: string;
   categoryName: string;
   categoryIcon?: string;
@@ -64,6 +68,41 @@ export interface AiPrediction {
   month: string;
 }
 
+export interface FinanceGroupMember {
+  userId: string;
+  displayName: string;
+  email?: string;
+  status: number;
+  joinedAt: string;
+}
+
+export interface FinanceGroup {
+  id: string;
+  name: string;
+  createdByUserId: string;
+  members: FinanceGroupMember[];
+}
+
+export interface FinanceGroupInvite {
+  id: string;
+  financeGroupId: string;
+  groupName: string;
+  inviterUserId: string;
+  inviterName: string;
+  inviteeUserId: string;
+  inviteeName: string;
+  status: number;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface FinanceSharingOverview {
+  inviteCode: string;
+  activeGroup?: FinanceGroup | null;
+  incomingInvites: FinanceGroupInvite[];
+  outgoingInvites: FinanceGroupInvite[];
+}
+
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 export const financeService = {
@@ -89,7 +128,7 @@ export const financeService = {
     const res = await apiClient.get('/finance/transactions', { params });
     return res.data.data;
   },
-  createTransaction: async (data: Omit<Transaction, 'id' | 'categoryName' | 'categoryIcon' | 'categoryColor'>): Promise<Transaction> => {
+  createTransaction: async (data: Omit<Transaction, 'id' | 'ownerUserId' | 'ownerName' | 'categoryName' | 'categoryIcon' | 'categoryColor'>): Promise<Transaction> => {
     const res = await apiClient.post('/finance/transactions', data);
     return res.data.data;
   },
@@ -125,11 +164,72 @@ export const financeService = {
     const res = await apiClient.get('/finance/summary', { params: { year, month } });
     return res.data.data;
   },
-  getAiPrediction: async (forceReload: boolean = false): Promise<AiPrediction> => {
-    const res = await apiClient.get('/finance/ai-prediction', { params: { forceReload } });
+  getAiPrediction: async (forceReload: boolean = false, scope: 'personal' | 'group' = 'group'): Promise<AiPrediction> => {
+    const res = await apiClient.get('/finance/ai-prediction', { params: { forceReload, scope } });
     return res.data.data;
   },
 
   // Reset
   resetAllData: async () => apiClient.delete('/finance/reset'),
+
+  // Sharing
+  getSharingOverview: async (): Promise<FinanceSharingOverview> => {
+    const res = await apiClient.get('/finance/sharing');
+    return res.data.data;
+  },
+  createGroupInvite: async (inviteCode: string): Promise<FinanceGroupInvite> => {
+    const res = await apiClient.post('/finance/sharing/invites', { inviteCode });
+    return res.data.data;
+  },
+  acceptGroupInvite: async (id: string) => apiClient.post(`/finance/sharing/invites/${id}/accept`),
+  rejectGroupInvite: async (id: string) => apiClient.post(`/finance/sharing/invites/${id}/reject`),
+  cancelGroupInvite: async (id: string) => apiClient.post(`/finance/sharing/invites/${id}/cancel`),
+  leaveActiveGroup: async () => apiClient.post('/finance/sharing/leave'),
+  updateActiveGroup: async (name: string): Promise<FinanceGroup> => {
+    const res = await apiClient.put('/finance/sharing/group', { name });
+    return res.data.data;
+  },
+};
+
+let financeHubConnection: signalR.HubConnection | null = null;
+
+export const financeHub = {
+  start: async (token: string, onChanged: () => void) => {
+    if (financeHubConnection) {
+      financeHubConnection.off('FinanceSharingChanged');
+      financeHubConnection.off('FinanceInviteReceived');
+      financeHubConnection.off('FinanceInviteAccepted');
+      financeHubConnection.off('FinanceInviteRejected');
+      financeHubConnection.on('FinanceSharingChanged', onChanged);
+      financeHubConnection.on('FinanceInviteReceived', onChanged);
+      financeHubConnection.on('FinanceInviteAccepted', onChanged);
+      financeHubConnection.on('FinanceInviteRejected', onChanged);
+      return;
+    }
+
+    const baseUrl = CONFIG.API_BASE_URL.replace(/\/api$/, '');
+    financeHubConnection = new signalR.HubConnectionBuilder()
+      .withUrl(`${baseUrl}/hubs/finance`, {
+        accessTokenFactory: () => token,
+      })
+      .withAutomaticReconnect()
+      .build();
+
+    financeHubConnection.on('FinanceSharingChanged', onChanged);
+    financeHubConnection.on('FinanceInviteReceived', onChanged);
+    financeHubConnection.on('FinanceInviteAccepted', onChanged);
+    financeHubConnection.on('FinanceInviteRejected', onChanged);
+
+    try {
+      await financeHubConnection.start();
+    } catch (err) {
+      console.error('Finance SignalR connection error:', err);
+    }
+  },
+  stop: async () => {
+    if (financeHubConnection) {
+      await financeHubConnection.stop();
+      financeHubConnection = null;
+    }
+  },
 };

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { financeService, type MonthlySummary, type SavingGoal, type Transaction, type AiPrediction } from '@/services/finance/financeService';
+import { financeHub, financeService, type MonthlySummary, type SavingGoal, type Transaction, type AiPrediction, type FinanceSharingOverview } from '@/services/finance/financeService';
 
 export function useFinanceSummary(year: number, month: number) {
   const [summary, setSummary] = useState<MonthlySummary | null>(null);
@@ -43,15 +43,15 @@ export function useTransactions(params: { month?: number; year?: number; type?: 
   return { transactions, loading, refresh: fetch };
 }
 
-export function useAiPrediction() {
+export function useAiPrediction(scope: 'personal' | 'group' = 'group') {
   const [prediction, setPrediction] = useState<AiPrediction | null>(null);
   const [loading, setLoading]       = useState(true);
 
   const fetch = useCallback(async (force: boolean = false) => {
     setLoading(true);
-    try { setPrediction(await financeService.getAiPrediction(force)); }
+    try { setPrediction(await financeService.getAiPrediction(force, scope)); }
     finally { setLoading(false); }
-  }, []);
+  }, [scope]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
@@ -70,4 +70,31 @@ export function useCategories() {
 
   useEffect(() => { fetch(); }, [fetch]);
   return { categories, loading, refresh: fetch };
+}
+
+export function useFinanceSharing(onChanged?: () => void) {
+  const [sharing, setSharing] = useState<FinanceSharingOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    try { setSharing(await financeService.getSharingOverview()); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) return;
+
+    const handleChanged = () => {
+      fetch();
+      onChanged?.();
+    };
+
+    financeHub.start(token, handleChanged);
+  }, [fetch, onChanged]);
+
+  return { sharing, loading, refresh: fetch };
 }

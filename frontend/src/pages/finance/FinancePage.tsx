@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -6,10 +6,15 @@ import {
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, Wallet, PiggyBank,
-  Plus, Trash2, Edit, Bot, ChevronLeft, ChevronRight, Loader2
+  Plus, Trash2, Edit, Bot, ChevronLeft, ChevronRight, Loader2,
+  Users, Copy, Send, Check, X, LogOut, Backpack, Landmark, Gem,
+  Crown, ScrollText, Coins, BriefcaseBusiness, HandCoins, WalletCards,
+  UtensilsCrossed, CarFront, GraduationCap, House, Plane, Gamepad2,
+  Music, Shirt, Coffee, Dumbbell, HeartPulse, Sparkles, BookOpen,
+  ReceiptText, ShoppingBag, Gift, Palette, Wrench, Fuel, Smartphone
 } from 'lucide-react';
-import { useFinanceSummary, useSavingGoals, useAiPrediction, useCategories, useTransactions } from '@/features/finance/components/useFinance';
-import { financeService } from '@/services/finance/financeService';
+import { useFinanceSummary, useSavingGoals, useAiPrediction, useCategories, useTransactions, useFinanceSharing } from '@/features/finance/components/useFinance';
+import { financeService, type FinanceSharingOverview } from '@/services/finance/financeService';
 import { ConfirmModal } from '@/components/shared/ConfirmModal';
 
 // ─── Format helpers ───────────────────────────────────────────────────────────
@@ -25,6 +30,45 @@ const EXPENSE_COLORS = [
   '#ef4444', '#ec4899', '#06b6d4', '#84cc16',
 ];
 
+const FINANCE_ICONS = [
+  { key: 'backpack', label: 'Balo', Icon: Backpack },
+  { key: 'landmark', label: 'Ngân hàng', Icon: Landmark },
+  { key: 'gem', label: 'Đá quý', Icon: Gem },
+  { key: 'crown', label: 'Vương miện', Icon: Crown },
+  { key: 'scroll', label: 'Cuộn giấy', Icon: ScrollText },
+  { key: 'coins', label: 'Xu cổ', Icon: Coins },
+  { key: 'briefcase', label: 'Cặp việc', Icon: BriefcaseBusiness },
+  { key: 'hand-coins', label: 'Nhận tiền', Icon: HandCoins },
+  { key: 'wallet-cards', label: 'Ví thẻ', Icon: WalletCards },
+  { key: 'utensils', label: 'Ăn uống', Icon: UtensilsCrossed },
+  { key: 'car', label: 'Xe', Icon: CarFront },
+  { key: 'graduation-cap', label: 'Học tập', Icon: GraduationCap },
+  { key: 'home', label: 'Nhà', Icon: House },
+  { key: 'plane', label: 'Du lịch', Icon: Plane },
+  { key: 'gamepad', label: 'Giải trí', Icon: Gamepad2 },
+  { key: 'music', label: 'Âm nhạc', Icon: Music },
+  { key: 'shirt', label: 'Thời trang', Icon: Shirt },
+  { key: 'coffee', label: 'Cafe', Icon: Coffee },
+  { key: 'dumbbell', label: 'Thể thao', Icon: Dumbbell },
+  { key: 'heart-pulse', label: 'Sức khỏe', Icon: HeartPulse },
+  { key: 'sparkles', label: 'Làm đẹp', Icon: Sparkles },
+  { key: 'book', label: 'Sách', Icon: BookOpen },
+  { key: 'receipt', label: 'Hóa đơn', Icon: ReceiptText },
+  { key: 'shopping-bag', label: 'Mua sắm', Icon: ShoppingBag },
+  { key: 'gift', label: 'Quà tặng', Icon: Gift },
+  { key: 'palette', label: 'Sáng tạo', Icon: Palette },
+  { key: 'wrench', label: 'Sửa chữa', Icon: Wrench },
+  { key: 'fuel', label: 'Xăng xe', Icon: Fuel },
+  { key: 'smartphone', label: 'Điện thoại', Icon: Smartphone },
+];
+
+const FINANCE_ICON_MAP = new Map(FINANCE_ICONS.map(item => [item.key, item.Icon]));
+
+function FinanceCategoryIcon({ icon, className = 'h-4 w-4' }: { icon?: string | null; className?: string }) {
+  const Icon = FINANCE_ICON_MAP.get(icon || '') ?? Coins;
+  return <Icon className={className} />;
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function FinancePage() {
   const now = new Date();
@@ -33,8 +77,15 @@ export function FinancePage() {
 
   const { summary, loading: loadSum, refresh: refreshSum } = useFinanceSummary(year, month);
   const { goals, loading: loadGoals, refresh: refreshGoals } = useSavingGoals();
-  const { prediction, loading: loadPred, refresh: refreshPred } = useAiPrediction();
+  const [aiScope, setAiScope] = useState<'personal' | 'group'>('group');
+  const { prediction, loading: loadPred, refresh: refreshPred } = useAiPrediction(aiScope);
   const { categories, refresh: refreshCats } = useCategories();
+  const [sharingVersion, setSharingVersion] = useState(0);
+  const handleSharingChanged = useCallback(() => {
+    refreshSum();
+    setSharingVersion(v => v + 1);
+  }, [refreshSum]);
+  const { sharing, loading: loadSharing, refresh: refreshSharing } = useFinanceSharing(handleSharingChanged);
 
   // Reset and Category modals
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -196,6 +247,16 @@ export function FinancePage() {
         </button>
       </div>
 
+      <FinanceSharingPanel
+        sharing={sharing}
+        loading={loadSharing}
+        onRefresh={() => {
+          refreshSharing();
+          refreshSum();
+          setSharingVersion(v => v + 1);
+        }}
+      />
+
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={<TrendingUp className="h-5 w-5" />} label="Tổng thu" value={fmtVnd(summary?.totalIncome ?? 0)} sub="tháng này" color="from-emerald-400 to-teal-500" />
@@ -258,6 +319,7 @@ export function FinancePage() {
       <div className="bg-card rounded-2xl border p-5 space-y-3">
         <h3 className="font-semibold text-sm">Giao dịch gần đây</h3>
         <TransactionList 
+          key={`${year}-${month}-${sharingVersion}`}
           month={month} 
           year={year} 
           onRefresh={refreshSum} 
@@ -318,7 +380,7 @@ export function FinancePage() {
 
       {/* ── AI Prediction ── */}
       <div className="rounded-2xl border glass bg-gradient-to-br from-primary/5 to-accent/5 p-6 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <Bot className="h-6 w-6 text-primary" />
@@ -332,14 +394,24 @@ export function FinancePage() {
               )}
             </div>
           </div>
-          <button 
-            onClick={() => refreshPred(true)} 
-            disabled={loadPred}
-            className="flex items-center gap-2 h-9 px-4 rounded-xl border border-primary/20 text-primary text-xs font-bold hover:bg-primary/10 transition disabled:opacity-50"
-          >
-            {loadPred ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TrendingUp className="h-3.5 w-3.5" />}
-            Làm mới gợi ý
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-xl border bg-background p-1">
+              <button onClick={() => setAiScope('personal')} className={`h-8 rounded-lg px-3 text-xs font-bold ${aiScope === 'personal' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                Cá nhân
+              </button>
+              <button onClick={() => setAiScope('group')} className={`h-8 rounded-lg px-3 text-xs font-bold ${aiScope === 'group' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                Gộp
+              </button>
+            </div>
+            <button 
+              onClick={() => refreshPred(true)} 
+              disabled={loadPred}
+              className="flex items-center gap-2 h-9 px-4 rounded-xl border border-primary/20 text-primary text-xs font-bold hover:bg-primary/10 transition disabled:opacity-50"
+            >
+              {loadPred ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TrendingUp className="h-3.5 w-3.5" />}
+              Làm mới gợi ý
+            </button>
+          </div>
         </div>
 
         {loadPred ? (
@@ -514,15 +586,21 @@ export function FinancePage() {
 function CategoryModal({ onClose, categories, onRefresh }: { onClose: () => void; categories: import('@/services/finance/financeService').FinanceCategory[]; onRefresh: () => void; }) {
   const [name, setName] = useState('');
   const [type, setType] = useState(1);
-  const [color, setColor] = useState('#8b5cf6');
+  const [icon, setIcon] = useState('coins');
   const [submitting, setSubmitting] = useState(false);
 
   const handleAdd = async () => {
     if (!name) return;
     setSubmitting(true);
     try {
-      await financeService.createCategory({ name, type, colorHex: color });
+      await financeService.createCategory({
+        name,
+        type,
+        icon,
+        colorHex: type === 0 ? '#10b981' : '#8b5cf6',
+      });
       setName('');
+      setIcon('coins');
       onRefresh();
     } finally {
       setSubmitting(false);
@@ -557,8 +635,22 @@ function CategoryModal({ onClose, categories, onRefresh }: { onClose: () => void
               <button onClick={() => setType(0)} className={`flex-1 h-9 rounded-xl text-xs font-medium transition ${type === 0 ? 'bg-primary text-primary-foreground' : 'border hover:bg-muted'}`}>Thu nhập</button>
               <button onClick={() => setType(1)} className={`flex-1 h-9 rounded-xl text-xs font-medium transition ${type === 1 ? 'bg-primary text-primary-foreground' : 'border hover:bg-muted'}`}>Chi tiêu</button>
             </div>
+            <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
+              {FINANCE_ICONS.map(item => (
+                <button
+                  key={item.key}
+                  type="button"
+                  title={item.label}
+                  onClick={() => setIcon(item.key)}
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl border transition ${
+                    icon === item.key ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
+                  }`}
+                >
+                  <item.Icon className="h-4 w-4" />
+                </button>
+              ))}
+            </div>
             <div className="flex gap-2">
-              <input type="color" value={color} onChange={e => setColor(e.target.value)} className="h-10 w-12 rounded-xl border p-1 cursor-pointer" />
               <input placeholder="Tên danh mục..." value={name} onChange={e => setName(e.target.value)} className="flex-1 h-10 rounded-xl border px-3 text-sm focus:ring-2 focus:ring-primary/50 outline-none" />
               <button onClick={handleAdd} disabled={!name || submitting} className="h-10 px-4 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition text-sm flex items-center gap-2">
                 {submitting && <Loader2 className="h-3 w-3 animate-spin" />} Thêm
@@ -574,7 +666,9 @@ function CategoryModal({ onClose, categories, onRefresh }: { onClose: () => void
                 {incomes.map(c => (
                   <div key={c.id} className="flex items-center justify-between p-2 rounded-lg border bg-card hover:border-primary/50 transition">
                     <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-full" style={{ backgroundColor: c.colorHex || '#ccc' }} />
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <FinanceCategoryIcon icon={c.icon} className="h-3.5 w-3.5" />
+                      </div>
                       <span className="text-sm font-medium">{c.name}</span>
                     </div>
                     <button onClick={() => handleDelete(c.id)} className="text-muted-foreground hover:text-destructive transition"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -589,7 +683,9 @@ function CategoryModal({ onClose, categories, onRefresh }: { onClose: () => void
                 {expenses.map(c => (
                   <div key={c.id} className="flex items-center justify-between p-2 rounded-lg border bg-card hover:border-primary/50 transition">
                     <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-full" style={{ backgroundColor: c.colorHex || '#ccc' }} />
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <FinanceCategoryIcon icon={c.icon} className="h-3.5 w-3.5" />
+                      </div>
                       <span className="text-sm font-medium">{c.name}</span>
                     </div>
                     <button onClick={() => handleDelete(c.id)} className="text-muted-foreground hover:text-destructive transition"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -621,6 +717,216 @@ function StatCard({ icon, label, value, sub, color, valueClass = '' }: {
 function EmptyChart({ text }: { text: string }) {
   return (
     <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">{text}</div>
+  );
+}
+
+function FinanceSharingPanel({ sharing, loading, onRefresh }: { sharing: FinanceSharingOverview | null; loading: boolean; onRefresh: () => void }) {
+  const [inviteCode, setInviteCode] = useState('');
+  const [groupName, setGroupName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+
+  useEffect(() => {
+    setGroupName(sharing?.activeGroup?.name ?? '');
+  }, [sharing?.activeGroup?.name]);
+
+  const copyInviteCode = async () => {
+    if (!sharing?.inviteCode) return;
+    await navigator.clipboard.writeText(sharing.inviteCode);
+    toast.success('Đã sao chép mã mời');
+  };
+
+  const handleInvite = async () => {
+    if (!inviteCode.trim()) {
+      toast.error('Vui lòng nhập mã mời');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await financeService.createGroupInvite(inviteCode.trim());
+      setInviteCode('');
+      toast.success('Đã gửi lời mời gộp tài chính');
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Không thể gửi lời mời');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const acceptInvite = async (id: string) => {
+    await financeService.acceptGroupInvite(id);
+    toast.success('Đã chấp nhận lời mời');
+    onRefresh();
+  };
+
+  const rejectInvite = async (id: string) => {
+    await financeService.rejectGroupInvite(id);
+    toast.success('Đã từ chối lời mời');
+    onRefresh();
+  };
+
+  const cancelInvite = async (id: string) => {
+    await financeService.cancelGroupInvite(id);
+    toast.success('Đã huỷ lời mời');
+    onRefresh();
+  };
+
+  const leaveGroup = async () => {
+    if (!window.confirm('Bạn có chắc muốn rời nhóm tài chính gộp? Dữ liệu thu chi của bạn vẫn được giữ nguyên.')) return;
+    await financeService.leaveActiveGroup();
+    toast.success('Đã rời nhóm tài chính');
+    onRefresh();
+  };
+
+  const renameGroup = async () => {
+    if (!groupName.trim()) {
+      toast.error('Tên tài khoản gộp không được để trống');
+      return;
+    }
+
+    setRenaming(true);
+    try {
+      await financeService.updateActiveGroup(groupName.trim());
+      toast.success('Đã đổi tên tài khoản gộp');
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Không thể đổi tên tài khoản gộp');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl border bg-card p-4">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border bg-card p-4 sm:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Users className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold">Gộp tài chính</h3>
+              <p className="text-xs text-muted-foreground">Mời người khác để cùng xem thu chi trong một nhóm.</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-medium text-muted-foreground">Mã mời của bạn</span>
+            <button
+              onClick={copyInviteCode}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1.5 font-mono font-bold text-foreground"
+            >
+              {sharing?.inviteCode || '...'}
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex w-full flex-col gap-2 sm:flex-row lg:max-w-md">
+          <input
+            value={inviteCode}
+            onChange={e => setInviteCode(e.target.value.toUpperCase())}
+            onKeyDown={e => e.key === 'Enter' && handleInvite()}
+            placeholder="Nhập mã mời, VD: FIN-123456"
+            className="h-10 min-w-0 flex-1 rounded-xl border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+          <button
+            onClick={handleInvite}
+            disabled={submitting}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          >
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Mời
+          </button>
+        </div>
+      </div>
+
+      {sharing?.activeGroup && (
+        <div className="mt-4 rounded-xl bg-muted/40 p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase text-muted-foreground">Nhóm đang gộp</p>
+              <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  value={groupName}
+                  onChange={e => setGroupName(e.target.value)}
+                  className="h-9 min-w-0 rounded-lg border bg-background px-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <button
+                  onClick={renameGroup}
+                  disabled={renaming || groupName.trim() === sharing.activeGroup.name}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-bold hover:bg-muted disabled:opacity-50"
+                >
+                  {renaming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Edit className="h-3.5 w-3.5" />}
+                  Lưu tên
+                </button>
+              </div>
+            </div>
+            <button onClick={leaveGroup} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-bold text-destructive hover:bg-destructive/10">
+              <LogOut className="h-3.5 w-3.5" /> Rời nhóm
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {sharing.activeGroup.members.map(member => (
+              <span key={member.userId} className="inline-flex max-w-full items-center rounded-lg bg-background px-2.5 py-1.5 text-xs font-semibold">
+                <span className="min-w-0 break-words">{member.displayName}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(sharing?.incomingInvites.length || sharing?.outgoingInvites.length) ? (
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {sharing.incomingInvites.length > 0 && (
+            <div className="rounded-xl border p-3">
+              <p className="mb-2 text-xs font-bold uppercase text-muted-foreground">Lời mời đến</p>
+              <div className="space-y-2">
+                {sharing.incomingInvites.map(invite => (
+                  <div key={invite.id} className="flex flex-col gap-2 rounded-lg bg-muted/40 p-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm"><b>{invite.inviterName}</b> mời bạn vào nhóm <b>{invite.groupName}</b></p>
+                    <div className="flex gap-2">
+                      <button onClick={() => acceptInvite(invite.id)} className="inline-flex h-8 items-center gap-1 rounded-lg bg-emerald-500 px-2.5 text-xs font-bold text-white">
+                        <Check className="h-3.5 w-3.5" /> Nhận
+                      </button>
+                      <button onClick={() => rejectInvite(invite.id)} className="inline-flex h-8 items-center gap-1 rounded-lg bg-muted px-2.5 text-xs font-bold">
+                        <X className="h-3.5 w-3.5" /> Từ chối
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {sharing.outgoingInvites.length > 0 && (
+            <div className="rounded-xl border p-3">
+              <p className="mb-2 text-xs font-bold uppercase text-muted-foreground">Lời mời đã gửi</p>
+              <div className="space-y-2">
+                {sharing.outgoingInvites.map(invite => (
+                  <div key={invite.id} className="flex flex-col gap-2 rounded-lg bg-muted/40 p-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm">Đang chờ <b>{invite.inviteeName}</b> chấp nhận</p>
+                    <button onClick={() => cancelInvite(invite.id)} className="inline-flex h-8 items-center justify-center gap-1 rounded-lg bg-muted px-2.5 text-xs font-bold">
+                      <X className="h-3.5 w-3.5" /> Huỷ
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -700,11 +1006,14 @@ function TransactionList({ month, year, onRefresh: _onRefresh, onEdit }: { month
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-full flex items-center justify-center text-sm"
               style={{ background: tx.categoryColor ? `${tx.categoryColor}22` : '#8b5cf622', color: tx.categoryColor ?? '#8b5cf6' }}>
-              {tx.categoryIcon ?? '💰'}
+              <FinanceCategoryIcon icon={tx.categoryIcon} className="h-4 w-4" />
             </div>
             <div>
               <p className="text-sm font-medium">{tx.categoryName}</p>
-              <p className="text-xs text-muted-foreground">{tx.note ?? new Date(tx.transactionDate).toLocaleDateString('vi-VN')}</p>
+              <p className="text-xs text-muted-foreground">
+                {tx.note ?? new Date(tx.transactionDate).toLocaleDateString('vi-VN')}
+                {tx.ownerName ? ` · ${tx.ownerName}` : ''}
+              </p>
             </div>
           </div>
           <div className="text-right flex items-center gap-4">
@@ -728,4 +1037,3 @@ function TransactionList({ month, year, onRefresh: _onRefresh, onEdit }: { month
     </div>
   );
 }
-

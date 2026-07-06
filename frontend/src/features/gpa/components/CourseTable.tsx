@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { gpaService, type Course } from '@/services/gpa/gpaService';
-import { Pencil, Trash2, Plus, Check, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, Trash2, Plus, Check, X } from 'lucide-react';
 import { ConfirmModal } from '@/components/shared/ConfirmModal';
 
 interface Props {
@@ -27,6 +27,7 @@ export function CourseTable({ semesterId, courses, onRefresh }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [showDel, setShowDel]       = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [openCourseIds, setOpenCourseIds] = useState<Set<string>>(new Set());
 
   const handleAdd = async () => {
     if (!form.courseName) {
@@ -76,9 +77,152 @@ export function CourseTable({ semesterId, courses, onRefresh }: Props) {
     setEditForm({ courseCode: c.courseCode, courseName: c.courseName, credits: c.credits, score: c.score });
   };
 
+  const toggleCourse = (id: string) => {
+    setOpenCourseIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="mt-2">
-      <div className="overflow-x-auto rounded-lg border border-border/60">
+      <div className="space-y-2 md:hidden">
+        {courses.map(c => {
+          const isOpen = openCourseIds.has(c.id);
+          const isEditing = editId === c.id;
+
+          return (
+            <div key={c.id} className="rounded-xl border bg-card">
+              {isEditing ? (
+                <div className="space-y-3 p-3">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <input value={editForm.courseCode} onChange={e => setEditForm(f => ({...f, courseCode: e.target.value}))} placeholder="Mã môn" className="h-10 rounded-lg border border-input bg-background px-3 text-sm" />
+                    <input value={editForm.courseName} onChange={e => setEditForm(f => ({...f, courseName: e.target.value}))} placeholder="Tên môn học" className="h-10 rounded-lg border border-input bg-background px-3 text-sm" />
+                    <input type="number" min={1} max={10} value={editForm.credits} onChange={e => setEditForm(f => ({...f, credits: +e.target.value}))} className="h-10 rounded-lg border border-input bg-background px-3 text-sm" />
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        disabled={editForm.score === null}
+                        min={0}
+                        max={10}
+                        step={0.25}
+                        value={editForm.score ?? ''}
+                        onChange={e => setEditForm(f => ({...f, score: e.target.value === '' ? null : +e.target.value}))}
+                        className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm"
+                        placeholder="Điểm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setEditForm(f => ({...f, score: f.score === null ? 0 : null}))}
+                        className={`h-10 shrink-0 rounded-lg px-3 text-[11px] font-bold ${editForm.score === null ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                      >
+                        Không GPA
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => handleUpdate(c.id)} disabled={submitting} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-500 px-3 text-xs font-bold text-white hover:bg-emerald-600">
+                      <Check className="h-3.5 w-3.5" /> Lưu
+                    </button>
+                    <button onClick={() => setEditId(null)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-muted px-3 text-xs font-bold">
+                      <X className="h-3.5 w-3.5" /> Huỷ
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => toggleCourse(c.id)}
+                    className="flex w-full items-center justify-between gap-3 p-3 text-left"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-[11px] font-semibold uppercase text-muted-foreground">{c.courseCode || 'Chưa có mã'}</p>
+                      <p className="mt-0.5 whitespace-normal break-words text-sm font-bold text-foreground">{c.courseName}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <GradeChip grade={c.gradeLabel} />
+                      {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                    </div>
+                  </button>
+
+                  {isOpen && (
+                    <div className="border-t px-3 py-3">
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-lg bg-muted/60 p-2">
+                          <p className="text-[10px] font-bold uppercase text-muted-foreground">Tín chỉ</p>
+                          <p className="mt-1 text-sm font-bold">{c.credits}</p>
+                        </div>
+                        <div className="rounded-lg bg-muted/60 p-2">
+                          <p className="text-[10px] font-bold uppercase text-muted-foreground">Điểm</p>
+                          <p className={`mt-1 text-sm font-bold ${c.score === null ? 'text-muted-foreground italic' : ''}`}>{c.score !== null ? c.score.toFixed(2) : 'Không tính'}</p>
+                        </div>
+                        <div className="rounded-lg bg-muted/60 p-2">
+                          <p className="text-[10px] font-bold uppercase text-muted-foreground">Xếp loại</p>
+                          <div className="mt-1 flex justify-center"><GradeChip grade={c.gradeLabel} /></div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex justify-end gap-2">
+                        <button onClick={() => startEdit(c)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary/10 px-3 text-xs font-bold text-primary">
+                          <Pencil className="h-3.5 w-3.5" /> Sửa
+                        </button>
+                        <button onClick={() => { setDeleteTarget(c.id); setShowDel(true); }} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-destructive/10 px-3 text-xs font-bold text-destructive">
+                          <Trash2 className="h-3.5 w-3.5" /> Xoá
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+
+        {adding && (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <input autoFocus value={form.courseCode} onChange={e => setForm(f => ({...f, courseCode: e.target.value}))} placeholder="Mã môn, VD: CS101" className="h-10 rounded-lg border border-primary/40 bg-background px-3 text-sm" />
+              <input value={form.courseName} onChange={e => setForm(f => ({...f, courseName: e.target.value}))} placeholder="Tên môn học..." className="h-10 rounded-lg border border-primary/40 bg-background px-3 text-sm" />
+              <input type="number" min={1} max={10} value={form.credits} onChange={e => setForm(f => ({...f, credits: +e.target.value}))} className="h-10 rounded-lg border border-primary/40 bg-background px-3 text-sm" />
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  disabled={form.score === null}
+                  min={0}
+                  max={10}
+                  step={0.25}
+                  value={form.score ?? ''}
+                  onChange={e => setForm(f => ({...f, score: e.target.value === '' ? null : +e.target.value}))}
+                  className="min-w-0 flex-1 rounded-lg border border-primary/40 bg-background px-3 text-sm"
+                  placeholder="Điểm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({...f, score: f.score === null ? 0 : null}))}
+                  className={`h-10 shrink-0 rounded-lg px-3 text-[11px] font-bold ${form.score === null ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                >
+                  Không GPA
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 flex justify-end gap-2">
+              <button onClick={handleAdd} disabled={submitting} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground">
+                <Check className="h-3.5 w-3.5" /> Tạo
+              </button>
+              <button onClick={() => setAdding(false)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-muted px-3 text-xs font-bold">
+                <X className="h-3.5 w-3.5" /> Huỷ
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-lg border border-border/60 md:block">
         <table className="w-full text-sm table-fixed">
           <thead>
             <tr className="border-b bg-muted/40 text-muted-foreground text-[10px] uppercase tracking-wider">
