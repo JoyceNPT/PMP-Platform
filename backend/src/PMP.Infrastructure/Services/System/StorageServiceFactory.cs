@@ -22,16 +22,20 @@ public class StorageServiceFactory : IStorageService
     {
         var provider = await _settingService.GetSettingAsync("Storage", "Cloudinary");
 
-        IStorageService actualService;
-        if (provider.Equals("S3", StringComparison.OrdinalIgnoreCase))
-        {
-            actualService = _serviceProvider.GetRequiredService<S3StorageService>();
-        }
-        else
-        {
-            actualService = _serviceProvider.GetRequiredService<CloudinaryStorageService>();
-        }
+        return await ResolveStorageService(provider).UploadFileAsync(fileStream, fileName, userId, feature);
+    }
 
-        return await actualService.UploadFileAsync(fileStream, fileName, userId, feature);
+    public async Task<ApiResponse<bool>> DeleteFileAsync(string fileUrl)
+    {
+        var provider = await _settingService.GetSettingAsync("Storage", "Cloudinary");
+        return await ResolveStorageService(provider).DeleteFileAsync(fileUrl);
+    }
+
+    private IStorageService ResolveStorageService(string provider)
+    {
+        if (provider.Equals("S3", StringComparison.OrdinalIgnoreCase))
+            return _serviceProvider.GetRequiredService<S3StorageService>();
+
+        return _serviceProvider.GetRequiredService<CloudinaryStorageService>();
     }
 }

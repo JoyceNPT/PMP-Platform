@@ -110,6 +110,7 @@ export function FinancePage() {
   const [txAttachmentUrl, setTxAttachmentUrl] = useState('');
   const [txAttachmentFile, setTxAttachmentFile] = useState<File | null>(null);
   const [txAttachmentPreview, setTxAttachmentPreview] = useState('');
+  const [previewImageUrl, setPreviewImageUrl] = useState('');
 
   // Quick-add saving goal state
   const [showGoal, setShowGoal]     = useState(false);
@@ -174,6 +175,9 @@ export function FinancePage() {
     }
     setTxSubmitting(true);
     try {
+      if (txAttachmentFile) {
+        toast.loading('Đang upload ảnh giao dịch...', { id: 'finance-tx-save' });
+      }
       const attachmentUrl = txAttachmentFile
         ? await financeService.uploadFinanceAttachment(txAttachmentFile)
         : txAttachmentUrl || undefined;
@@ -195,6 +199,15 @@ export function FinancePage() {
       setTxAmount(''); setTxNote(''); setTxCatId('');
       resetTxAttachment();
       refreshSum();
+      toast.success(editingTxId ? 'Đã cập nhật giao dịch' : 'Đã lưu giao dịch', { id: 'finance-tx-save' });
+    } catch (error: any) {
+      const message = error?.code === 'ECONNABORTED'
+        ? 'Upload ảnh quá lâu. Vui lòng kiểm tra Cloudinary hoặc thử ảnh nhỏ hơn.'
+        : error?.response?.data?.message
+          || error?.response?.data?.Message
+          || error?.message
+          || 'Không thể lưu giao dịch. Vui lòng thử lại.';
+      toast.error(message, { id: 'finance-tx-save' });
     } finally {
       setTxSubmitting(false);
     }
@@ -370,6 +383,7 @@ export function FinancePage() {
           month={month} 
           year={year} 
           onRefresh={refreshSum} 
+          onPreviewImage={setPreviewImageUrl}
           onEdit={(tx) => {
              setEditingTxId(tx.id);
              setTxType(tx.type);
@@ -494,8 +508,8 @@ export function FinancePage() {
       {/* ── Add Transaction Modal ── */}
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md rounded-2xl border bg-card shadow-xl p-6 space-y-4 animate-fade-in-up">
-            <h3 className="font-bold text-lg">Thêm giao dịch</h3>
+          <div className="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-2xl border bg-card shadow-xl p-6 space-y-4 animate-fade-in-up">
+            <h3 className="font-bold text-lg">{editingTxId ? 'Sửa giao dịch' : 'Thêm giao dịch'}</h3>
 
             {/* Type toggle */}
             <div className="flex gap-2">
@@ -533,11 +547,11 @@ export function FinancePage() {
               onChange={e => setTxNote(e.target.value)}
               className="flex h-10 w-full rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
 
-            <div className="rounded-xl border border-dashed bg-muted/10 p-3 space-y-3">
+            <div className="rounded-xl border border-dashed border-primary/35 bg-primary/5 p-3 space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <ImageIcon className="h-4 w-4" />
-                  Ảnh hoá đơn / minh chứng
+                  Upload ảnh giao dịch
                 </label>
                 {txAttachmentPreview && (
                   <button
@@ -555,9 +569,10 @@ export function FinancePage() {
                   <img src={txAttachmentPreview} alt="Ảnh giao dịch" className="h-32 w-full object-cover" />
                 </a>
               ) : (
-                <label className="flex h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border bg-background text-xs text-muted-foreground transition hover:bg-muted">
+                <label className="flex h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border bg-background text-xs font-medium text-muted-foreground transition hover:bg-muted">
                   <Upload className="h-5 w-5" />
-                  Chọn ảnh từ thiết bị
+                  Tải ảnh lên Cloudinary
+                  <span className="text-[11px] font-normal">JPG, PNG, WebP tối đa 5MB</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -666,6 +681,29 @@ export function FinancePage() {
         title="Xoá giao dịch?"
         description="Bạn có chắc muốn xoá giao dịch này?"
       />
+
+      {previewImageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fade-in"
+          onClick={() => setPreviewImageUrl('')}
+        >
+          <div className="relative max-h-[92vh] w-full max-w-4xl" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setPreviewImageUrl('')}
+              className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black"
+              aria-label="Đóng ảnh"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              src={previewImageUrl}
+              alt="Ảnh giao dịch"
+              className="max-h-[92vh] w-full rounded-xl object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1082,12 +1120,13 @@ function GoalCard({ goal, onDelete, onRefresh, onEdit }: { goal: import('@/servi
   );
 }
 
-function TransactionList({ month, year, onRefresh: _onRefresh, onEdit, onDelete }: {
+function TransactionList({ month, year, onRefresh: _onRefresh, onEdit, onDelete, onPreviewImage }: {
   month: number;
   year: number;
   onRefresh: () => void;
   onEdit: (tx: import('@/services/finance/financeService').Transaction) => void;
   onDelete: (id: string) => void;
+  onPreviewImage: (url: string) => void;
 }) {
   const { transactions, loading, refresh } = useTransactions({ month, year });
 
@@ -1110,15 +1149,14 @@ function TransactionList({ month, year, onRefresh: _onRefresh, onEdit, onDelete 
                 {tx.ownerName ? ` · ${tx.ownerName}` : ''}
               </p>
               {tx.attachmentUrl && (
-                <a
-                  href={tx.attachmentUrl}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => onPreviewImage(tx.attachmentUrl!)}
                   className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                 >
                   <ImageIcon className="h-3 w-3" />
                   Ảnh
-                </a>
+                </button>
               )}
             </div>
           </div>

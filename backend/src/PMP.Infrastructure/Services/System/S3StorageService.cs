@@ -1,5 +1,6 @@
 using Amazon;
 using Amazon.S3;
+using Amazon.S3.Model;
 using Amazon.S3.Transfer;
 using Microsoft.Extensions.Configuration;
 using PMP.Application.Features.System.Interfaces;
@@ -63,6 +64,34 @@ public class S3StorageService : IStorageService
         catch (Exception ex)
         {
             return new ApiResponse<string>($"Lỗi khi upload file lên AWS S3: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<bool>> DeleteFileAsync(string fileUrl)
+    {
+        if (string.IsNullOrWhiteSpace(fileUrl))
+            return new ApiResponse<bool>(true);
+
+        if (!Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri))
+            return new ApiResponse<bool>("URL file S3 không hợp lệ.");
+
+        var key = uri.AbsolutePath.TrimStart('/');
+        if (string.IsNullOrWhiteSpace(key))
+            return new ApiResponse<bool>("Không thể xác định key S3 từ URL file.");
+
+        try
+        {
+            await _s3Client.DeleteObjectAsync(new DeleteObjectRequest
+            {
+                BucketName = _bucketName,
+                Key = key
+            });
+
+            return new ApiResponse<bool>(true, "Đã xoá file AWS S3.");
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool>($"Lỗi khi xoá file AWS S3: {ex.Message}");
         }
     }
 }

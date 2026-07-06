@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
 using PMP.Application.Features.Finance.DTOs;
 using PMP.Application.Features.Finance.Interfaces;
+using PMP.Application.Features.System.Interfaces;
 using PMP.Domain.Entities.Auth;
 using PMP.Domain.Entities.Finance;
 using PMP.Domain.Enums;
@@ -19,17 +20,20 @@ public class FinanceService : IFinanceService
     private readonly IAiService _aiService;
     private readonly IHubContext<FinanceHub> _financeHub;
     private readonly IHubContext<NotificationHub> _notificationHub;
+    private readonly IStorageService _storageService;
 
     public FinanceService(
         ApplicationDbContext db,
         IAiService aiService,
         IHubContext<FinanceHub> financeHub,
-        IHubContext<NotificationHub> notificationHub)
+        IHubContext<NotificationHub> notificationHub,
+        IStorageService storageService)
     {
         _db = db;
         _aiService = aiService;
         _financeHub = financeHub;
         _notificationHub = notificationHub;
+        _storageService = storageService;
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -96,6 +100,17 @@ public class FinanceService : IFinanceService
         ExpiresAt      = i.ExpiresAt,
         CreatedAt      = i.CreatedAt
     };
+
+    private async Task DeleteAttachmentIfChangedAsync(string? oldUrl, string? newUrl)
+    {
+        if (string.IsNullOrWhiteSpace(oldUrl))
+            return;
+
+        if (string.Equals(oldUrl, newUrl, StringComparison.Ordinal))
+            return;
+
+        await _storageService.DeleteFileAsync(oldUrl);
+    }
 
     private async Task<List<Guid>> GetFinanceUserScopeAsync(Guid userId)
     {
@@ -351,12 +366,14 @@ public class FinanceService : IFinanceService
             .FirstOrDefaultAsync(t => t.Id == txId && t.UserId == userId);
         if (tx is null) return new ApiResponse<TransactionDto>("Không tìm thấy giao dịch.");
 
+        var oldAttachmentUrl = tx.AttachmentUrl;
         tx.CategoryId      = req.CategoryId;
         tx.Amount          = req.Amount;
         tx.TransactionDate = req.TransactionDate;
         tx.Note            = req.Note;
         tx.AttachmentUrl   = req.AttachmentUrl;
         await _db.SaveChangesAsync();
+        await DeleteAttachmentIfChangedAsync(oldAttachmentUrl, req.AttachmentUrl);
 
         // reload category
         tx.Category = await _db.FinanceCategories.FindAsync(req.CategoryId) ?? tx.Category;
@@ -368,8 +385,10 @@ public class FinanceService : IFinanceService
     {
         var tx = await _db.Transactions.FirstOrDefaultAsync(t => t.Id == txId && t.UserId == userId);
         if (tx is null) return new ApiResponse<bool>("Không tìm thấy giao dịch.");
+        var oldAttachmentUrl = tx.AttachmentUrl;
         _db.Transactions.Remove(tx);
         await _db.SaveChangesAsync();
+        await DeleteAttachmentIfChangedAsync(oldAttachmentUrl, null);
         return new ApiResponse<bool>(true, "Đã xoá giao dịch.");
     }
 

@@ -146,6 +146,7 @@ export const financeService = {
     const res = await apiClient.post('/upload', formData, {
       params: { feature: 'finance' },
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000,
     });
     return res.data.data;
   },
