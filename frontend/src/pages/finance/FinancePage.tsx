@@ -27,10 +27,31 @@ const fmtVnd = (v: number) =>
     ? `${(v / 1_000).toFixed(0)}K`
     : `${v}`;
 
+const normalizeVndAmountInput = (value: string) =>
+  value.replace(/[^\d]/g, '').replace(/^0+(?=\d)/, '');
+
+const formatVndAmountInput = (value: string) =>
+  normalizeVndAmountInput(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
 const EXPENSE_COLORS = [
-  '#8b5cf6', '#3b82f6', '#f59e0b', '#10b981',
-  '#ef4444', '#ec4899', '#06b6d4', '#84cc16',
+  '#ef4444', '#f97316', '#f59e0b', '#84cc16',
+  '#10b981', '#06b6d4', '#3b82f6', '#6366f1',
+  '#ec4899', '#14b8a6', '#a855f7', '#64748b',
 ];
+
+const INCOME_COLORS = [
+  '#10b981', '#22c55e', '#06b6d4', '#3b82f6',
+  '#84cc16', '#14b8a6', '#f59e0b', '#6366f1',
+];
+
+const DEFAULT_CATEGORY_COLORS = new Set(['#8b5cf6', '#10b981']);
+
+const getChartColor = (colorHex: string | null | undefined, index: number, palette = EXPENSE_COLORS) => {
+  const normalized = colorHex?.trim().toLowerCase();
+  return normalized && !DEFAULT_CATEGORY_COLORS.has(normalized)
+    ? normalized
+    : palette[index % palette.length];
+};
 
 const FINANCE_ICONS = [
   { key: 'backpack', label: 'Balo', Icon: Backpack },
@@ -176,6 +197,11 @@ export function FinancePage() {
 
   const handleAddTx = async () => {
     if (!txAmount || !txCatId) return;
+    const amountValue = Number(txAmount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      toast.error('Số tiền phải lớn hơn 0.');
+      return;
+    }
     if (new Date(txDate) > new Date()) {
       toast.error('Không thể nhập giao dịch trong tương lai. Vui lòng chọn ngày hôm nay hoặc quá khứ.');
       return;
@@ -191,7 +217,7 @@ export function FinancePage() {
       const data = {
         categoryId: txCatId,
         type: txType,
-        amount: parseFloat(txAmount),
+        amount: amountValue,
         transactionDate: txDate,
         note: txNote || undefined,
         attachmentUrl,
@@ -249,6 +275,15 @@ export function FinancePage() {
     await financeService.deleteSavingGoal(id);
     toast.success('Đã xoá mục tiêu tiết kiệm');
     refreshGoals();
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    await financeService.deleteCategory(id);
+    toast.success('Đã xoá danh mục');
+    setDelCatId(null);
+    refreshCats();
+    refreshSum();
+    setSharingVersion(v => v + 1);
   };
 
   // Categories for quick-add dropdown
@@ -386,7 +421,7 @@ export function FinancePage() {
                   paddingAngle={2}
                 >
                   {summary.expenseBreakdown.map((entry, i) => (
-                    <Cell key={i} fill={entry.colorHex ?? EXPENSE_COLORS[i % EXPENSE_COLORS.length]} />
+                    <Cell key={i} fill={getChartColor(entry.colorHex, i, EXPENSE_COLORS)} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(v) => [`${Number(v ?? 0).toLocaleString()}đ`]} />
@@ -474,7 +509,7 @@ export function FinancePage() {
           onEdit={(tx) => {
              setEditingTxId(tx.id);
              setTxType(tx.type);
-             setTxAmount(tx.amount.toString());
+             setTxAmount(normalizeVndAmountInput(tx.amount.toString()));
              setTxCatId(tx.categoryId);
              setTxNote(tx.note || '');
              setTxDate(tx.transactionDate.split('T')[0]);
@@ -608,9 +643,21 @@ export function FinancePage() {
               ))}
             </div>
 
-            <input type="number" placeholder="Số tiền (VNĐ)" value={txAmount}
-              onChange={e => setTxAmount(e.target.value)}
-              className="flex h-10 w-full rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Số tiền</label>
+              <div className="flex h-12 items-center rounded-xl border border-input bg-background px-3 focus-within:ring-2 focus-within:ring-primary/50">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="0"
+                  value={formatVndAmountInput(txAmount)}
+                  onChange={e => setTxAmount(normalizeVndAmountInput(e.target.value))}
+                  className="min-w-0 flex-1 bg-transparent text-lg font-bold tabular-nums outline-none placeholder:text-muted-foreground/50"
+                />
+                <span className="ml-2 shrink-0 text-sm font-bold text-muted-foreground">VND</span>
+              </div>
+            </div>
 
             <input type="date" value={txDate} onChange={e => setTxDate(e.target.value)}
               max={new Date().toISOString().split('T')[0]}
@@ -726,6 +773,10 @@ export function FinancePage() {
           onClose={() => setShowCategoryModal(false)} 
           categories={categories} 
           onRefresh={refreshCats} 
+          onDeleteRequest={(id) => {
+            setDelCatId(id);
+            setShowDelCat(true);
+          }}
         />
       )}
 
@@ -797,7 +848,17 @@ export function FinancePage() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function CategoryModal({ onClose, categories, onRefresh }: { onClose: () => void; categories: import('@/services/finance/financeService').FinanceCategory[]; onRefresh: () => void; }) {
+function CategoryModal({
+  onClose,
+  categories,
+  onRefresh,
+  onDeleteRequest,
+}: {
+  onClose: () => void;
+  categories: import('@/services/finance/financeService').FinanceCategory[];
+  onRefresh: () => void;
+  onDeleteRequest: (id: string) => void;
+}) {
   const [name, setName] = useState('');
   const [type, setType] = useState(1);
   const [icon, setIcon] = useState('coins');
@@ -811,7 +872,9 @@ function CategoryModal({ onClose, categories, onRefresh }: { onClose: () => void
         name,
         type,
         icon,
-        colorHex: type === 0 ? '#10b981' : '#8b5cf6',
+        colorHex: type === 0
+          ? INCOME_COLORS[incomes.length % INCOME_COLORS.length]
+          : EXPENSE_COLORS[expenses.length % EXPENSE_COLORS.length],
       });
       setName('');
       setIcon('coins');
@@ -819,12 +882,6 @@ function CategoryModal({ onClose, categories, onRefresh }: { onClose: () => void
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleDelete = async (id: string) => {
-    await financeService.deleteCategory(id);
-    toast.success('Đã xoá danh mục');
-    onRefresh();
   };
 
   const incomes = categories.filter(c => c.type === 0);
@@ -885,7 +942,7 @@ function CategoryModal({ onClose, categories, onRefresh }: { onClose: () => void
                       </div>
                       <span className="text-sm font-medium">{c.name}</span>
                     </div>
-                    <button onClick={() => handleDelete(c.id)} className="text-muted-foreground hover:text-destructive transition"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => onDeleteRequest(c.id)} className="text-muted-foreground hover:text-destructive transition"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
                 {!incomes.length && <p className="text-xs text-muted-foreground italic">Trống</p>}
@@ -902,7 +959,7 @@ function CategoryModal({ onClose, categories, onRefresh }: { onClose: () => void
                       </div>
                       <span className="text-sm font-medium">{c.name}</span>
                     </div>
-                    <button onClick={() => handleDelete(c.id)} className="text-muted-foreground hover:text-destructive transition"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => onDeleteRequest(c.id)} className="text-muted-foreground hover:text-destructive transition"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
                 {!expenses.length && <p className="text-xs text-muted-foreground italic">Trống</p>}
@@ -939,6 +996,7 @@ function FinanceSharingPanel({ sharing, loading, onRefresh }: { sharing: Finance
   const [groupName, setGroupName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   useEffect(() => {
     setGroupName(sharing?.activeGroup?.name ?? '');
@@ -988,7 +1046,6 @@ function FinanceSharingPanel({ sharing, loading, onRefresh }: { sharing: Finance
   };
 
   const leaveGroup = async () => {
-    if (!window.confirm('Bạn có chắc muốn rời nhóm tài chính gộp? Dữ liệu thu chi của bạn vẫn được giữ nguyên.')) return;
     await financeService.leaveActiveGroup();
     toast.success('Đã rời nhóm tài chính');
     onRefresh();
@@ -1086,7 +1143,7 @@ function FinanceSharingPanel({ sharing, loading, onRefresh }: { sharing: Finance
                 </button>
               </div>
             </div>
-            <button onClick={leaveGroup} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-bold text-destructive hover:bg-destructive/10">
+            <button onClick={() => setShowLeaveConfirm(true)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-bold text-destructive hover:bg-destructive/10">
               <LogOut className="h-3.5 w-3.5" /> Rời nhóm
             </button>
           </div>
@@ -1140,6 +1197,15 @@ function FinanceSharingPanel({ sharing, loading, onRefresh }: { sharing: Finance
           )}
         </div>
       ) : null}
+
+      <ConfirmModal
+        isOpen={showLeaveConfirm}
+        onClose={() => setShowLeaveConfirm(false)}
+        onConfirm={leaveGroup}
+        title="Rời nhóm tài chính?"
+        description="Bạn sẽ không còn xem dữ liệu thu chi của nhóm này. Dữ liệu thu chi cá nhân của bạn vẫn được giữ nguyên."
+        confirmText="Rời nhóm"
+      />
     </div>
   );
 }

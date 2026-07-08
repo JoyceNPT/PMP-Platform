@@ -25,8 +25,8 @@ export function ConfirmModal({
   return (
     <Dialog.Root open={isOpen} onOpenChange={onClose}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm animate-fade-in" />
-        <Dialog.Content className="fixed inset-0 z-[101] flex items-center justify-center p-4 focus:outline-none">
+        <Dialog.Overlay className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm animate-fade-in" />
+        <Dialog.Content className="fixed inset-0 z-[121] flex items-center justify-center p-4 focus:outline-none">
           <div className="w-full max-w-md rounded-2xl border bg-card p-6 shadow-2xl animate-fade-in-up">
           <div className="flex items-start gap-4">
             <div className={`mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${

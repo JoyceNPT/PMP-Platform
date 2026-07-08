@@ -41,3 +41,5 @@ backend/src/PMP.API/appsettings.local.json
 # Agent/design tooling
 .impeccable/
 .impeccable.md
+
+.Deploy_Vercel_Render_NeonDB.txt
