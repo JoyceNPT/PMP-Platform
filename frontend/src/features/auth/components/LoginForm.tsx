@@ -20,11 +20,14 @@ export function LoginForm() {
   const setAuth = useAuthStore((state) => state.setAuth);
   const navigate = useNavigate();
   const { executeRecaptcha } = useGoogleReCaptcha();
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
   const onSubmit = async (data: LoginFormData) => {
     try {
       let recaptchaValue = '';
-      if (executeRecaptcha) {
+      if (isLocalhost) {
+        recaptchaValue = 'MOCK_TOKEN';
+      } else if (executeRecaptcha) {
         recaptchaValue = await executeRecaptcha('login');
       }
       

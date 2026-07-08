@@ -22,17 +22,15 @@ export function LoginPage() {
   const navigate = useNavigate();
   const { executeRecaptcha } = useGoogleReCaptcha();
   const { theme, setTheme } = useTheme();
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
   const onSubmit = async (data: LoginFormData) => {
     try {
       let recaptchaValue = '';
-      if (executeRecaptcha) {
-        recaptchaValue = await executeRecaptcha('login');
-      }
-      
-      // Bypass for local testing
-      if (!recaptchaValue && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      if (isLocalhost) {
         recaptchaValue = 'MOCK_TOKEN';
+      } else if (executeRecaptcha) {
+        recaptchaValue = await executeRecaptcha('login');
       }
       
       setIsLoading(true);

@@ -27,6 +27,21 @@ apiClient.interceptors.request.use(
 
 let refreshPromise: Promise<string> | null = null;
 
+const isAuthEndpoint = (url?: string) => {
+  if (!url) return false;
+  return [
+    '/auth/login',
+    '/auth/google-login',
+    '/auth/register',
+    '/auth/forgot-password',
+    '/auth/reset-password',
+    '/auth/verify-email',
+    '/Auth/forgot-password',
+    '/Auth/reset-password',
+    '/Auth/verify-email',
+  ].some(endpoint => url.includes(endpoint));
+};
+
 const refreshAccessToken = async () => {
   if (!refreshPromise) {
     refreshPromise = axios
@@ -52,7 +67,12 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config;
     
     // If error is 401 and we haven't retried yet
-    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh-token')) {
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/refresh-token') &&
+      !isAuthEndpoint(originalRequest.url)
+    ) {
       originalRequest._retry = true;
       
       try {
