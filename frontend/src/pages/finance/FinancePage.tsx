@@ -17,6 +17,7 @@ import {
 import { useFinanceSummary, useSavingGoals, useAiPrediction, useCategories, useTransactions, useFinanceSharing } from '@/features/finance/components/useFinance';
 import { financeService, type FinanceSharingOverview } from '@/services/finance/financeService';
 import { ConfirmModal } from '@/components/shared/ConfirmModal';
+import { useAuthStore } from '@/store/authStore';
 
 // ─── Format helpers ───────────────────────────────────────────────────────────
 const fmtVnd = (v: number) =>
@@ -73,6 +74,7 @@ function FinanceCategoryIcon({ icon, className = 'h-4 w-4' }: { icon?: string | 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function FinancePage() {
   const now = new Date();
+  const currentUser = useAuthStore(state => state.user);
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear]   = useState(now.getFullYear());
 
@@ -111,6 +113,11 @@ export function FinancePage() {
   const [txAttachmentFile, setTxAttachmentFile] = useState<File | null>(null);
   const [txAttachmentPreview, setTxAttachmentPreview] = useState('');
   const [previewImageUrl, setPreviewImageUrl] = useState('');
+  const [filterCategoryId, setFilterCategoryId] = useState('');
+  const [filterFromDate, setFilterFromDate] = useState('');
+  const [filterToDate, setFilterToDate] = useState('');
+  const [filterOwnerUserId, setFilterOwnerUserId] = useState('');
+  const [filterNote, setFilterNote] = useState('');
 
   // Quick-add saving goal state
   const [showGoal, setShowGoal]     = useState(false);
@@ -246,6 +253,23 @@ export function FinancePage() {
 
   // Categories for quick-add dropdown
   const displayCats = categories.filter(c => c.type === txType);
+  const ownerOptions = sharing?.activeGroup?.members?.length
+    ? sharing.activeGroup.members.map(member => ({
+        userId: member.userId,
+        displayName: member.displayName || member.email || 'Người dùng',
+      }))
+    : currentUser
+      ? [{ userId: currentUser.id, displayName: currentUser.fullName || currentUser.email }]
+      : [];
+  const hasTransactionFilters = !!(filterCategoryId || filterFromDate || filterToDate || filterOwnerUserId || filterNote.trim());
+
+  const clearTransactionFilters = () => {
+    setFilterCategoryId('');
+    setFilterFromDate('');
+    setFilterToDate('');
+    setFilterOwnerUserId('');
+    setFilterNote('');
+  };
 
   const handleResetData = async () => {
     setTxSubmitting(true);
@@ -377,11 +401,74 @@ export function FinancePage() {
 
       {/* ── Transaction list ── */}
       <div className="bg-card rounded-2xl border p-5 space-y-3">
-        <h3 className="font-semibold text-sm">Giao dịch gần đây</h3>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <h3 className="font-semibold text-sm">Giao dịch gần đây</h3>
+          {hasTransactionFilters && (
+            <button
+              type="button"
+              onClick={clearTransactionFilters}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+              Xoá filter
+            </button>
+          )}
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <select
+            value={filterCategoryId}
+            onChange={e => setFilterCategoryId(e.target.value)}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+          >
+            <option value="">Tất cả danh mục</option>
+            {categories.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.type === 0 ? 'Thu' : 'Chi'} - {c.name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="date"
+            value={filterFromDate}
+            onChange={e => setFilterFromDate(e.target.value)}
+            max={filterToDate || undefined}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            title="Từ ngày"
+          />
+          <input
+            type="date"
+            value={filterToDate}
+            onChange={e => setFilterToDate(e.target.value)}
+            min={filterFromDate || undefined}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            title="Đến ngày"
+          />
+          <select
+            value={filterOwnerUserId}
+            onChange={e => setFilterOwnerUserId(e.target.value)}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+          >
+            <option value="">Tất cả người tạo</option>
+            {ownerOptions.map(owner => (
+              <option key={owner.userId} value={owner.userId}>{owner.displayName}</option>
+            ))}
+          </select>
+          <input
+            value={filterNote}
+            onChange={e => setFilterNote(e.target.value)}
+            placeholder="Tìm trong ghi chú"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
         <TransactionList 
           key={`${year}-${month}-${sharingVersion}`}
           month={month} 
           year={year} 
+          categoryId={filterCategoryId || undefined}
+          fromDate={filterFromDate || undefined}
+          toDate={filterToDate || undefined}
+          ownerUserId={filterOwnerUserId || undefined}
+          note={filterNote.trim() || undefined}
           onRefresh={refreshSum} 
           onPreviewImage={setPreviewImageUrl}
           onEdit={(tx) => {
@@ -1120,15 +1207,41 @@ function GoalCard({ goal, onDelete, onRefresh, onEdit }: { goal: import('@/servi
   );
 }
 
-function TransactionList({ month, year, onRefresh: _onRefresh, onEdit, onDelete, onPreviewImage }: {
+function TransactionList({
+  month,
+  year,
+  categoryId,
+  fromDate,
+  toDate,
+  ownerUserId,
+  note,
+  onRefresh: _onRefresh,
+  onEdit,
+  onDelete,
+  onPreviewImage,
+}: {
   month: number;
   year: number;
+  categoryId?: string;
+  fromDate?: string;
+  toDate?: string;
+  ownerUserId?: string;
+  note?: string;
   onRefresh: () => void;
   onEdit: (tx: import('@/services/finance/financeService').Transaction) => void;
   onDelete: (id: string) => void;
   onPreviewImage: (url: string) => void;
 }) {
-  const { transactions, loading, refresh } = useTransactions({ month, year });
+  const hasDateRange = !!(fromDate || toDate);
+  const { transactions, loading, refresh } = useTransactions({
+    month: hasDateRange ? undefined : month,
+    year: hasDateRange ? undefined : year,
+    categoryId,
+    fromDate,
+    toDate,
+    ownerUserId,
+    note,
+  });
 
   if (loading) return <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
   if (!transactions.length) return <div className="text-sm text-center text-muted-foreground py-6">Chưa có giao dịch trong tháng này</div>;

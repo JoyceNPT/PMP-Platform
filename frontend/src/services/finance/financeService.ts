@@ -124,7 +124,16 @@ export const financeService = {
 
   // Transactions
   getTransactions: async (params?: {
-    month?: number; year?: number; type?: number; categoryId?: string; page?: number;
+    month?: number;
+    year?: number;
+    type?: number;
+    categoryId?: string;
+    fromDate?: string;
+    toDate?: string;
+    ownerUserId?: string;
+    note?: string;
+    page?: number;
+    pageSize?: number;
   }): Promise<Transaction[]> => {
     const res = await apiClient.get('/finance/transactions', { params });
     return res.data.data;

@@ -29,7 +29,16 @@ export function useSavingGoals() {
   return { goals, loading, refresh: fetch };
 }
 
-export function useTransactions(params: { month?: number; year?: number; type?: number }) {
+export function useTransactions(params: {
+  month?: number;
+  year?: number;
+  type?: number;
+  categoryId?: string;
+  fromDate?: string;
+  toDate?: string;
+  ownerUserId?: string;
+  note?: string;
+}) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading]           = useState(true);
 
@@ -37,7 +46,16 @@ export function useTransactions(params: { month?: number; year?: number; type?: 
     setLoading(true);
     try { setTransactions(await financeService.getTransactions(params)); }
     finally { setLoading(false); }
-  }, [params.month, params.year, params.type]);
+  }, [
+    params.month,
+    params.year,
+    params.type,
+    params.categoryId,
+    params.fromDate,
+    params.toDate,
+    params.ownerUserId,
+    params.note,
+  ]);
 
   useEffect(() => { fetch(); }, [fetch]);
   return { transactions, loading, refresh: fetch };

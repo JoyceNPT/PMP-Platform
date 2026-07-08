@@ -315,9 +315,15 @@ public class FinanceService : IFinanceService
             .Include(t => t.Category)
             .Where(t => scopeUserIds.Contains(t.UserId));
 
-        if (q.Month.HasValue && q.Year.HasValue)
+        if (q.FromDate.HasValue)
+            query = query.Where(t => t.TransactionDate >= q.FromDate.Value);
+
+        if (q.ToDate.HasValue)
+            query = query.Where(t => t.TransactionDate <= q.ToDate.Value);
+
+        if (!q.FromDate.HasValue && !q.ToDate.HasValue && q.Month.HasValue && q.Year.HasValue)
             query = query.Where(t => t.TransactionDate.Month == q.Month && t.TransactionDate.Year == q.Year);
-        else if (q.Year.HasValue)
+        else if (!q.FromDate.HasValue && !q.ToDate.HasValue && q.Year.HasValue)
             query = query.Where(t => t.TransactionDate.Year == q.Year);
 
         if (q.Type.HasValue)
@@ -325,6 +331,15 @@ public class FinanceService : IFinanceService
 
         if (q.CategoryId.HasValue)
             query = query.Where(t => t.CategoryId == q.CategoryId.Value);
+
+        if (q.OwnerUserId.HasValue && scopeUserIds.Contains(q.OwnerUserId.Value))
+            query = query.Where(t => t.UserId == q.OwnerUserId.Value);
+
+        if (!string.IsNullOrWhiteSpace(q.Note))
+        {
+            var noteKeyword = q.Note.Trim();
+            query = query.Where(t => t.Note != null && EF.Functions.ILike(t.Note, $"%{noteKeyword}%"));
+        }
 
         var data = await query
             .OrderByDescending(t => t.TransactionDate)

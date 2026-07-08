@@ -69,6 +69,10 @@ public class TransactionQueryParams
     public int? Year { get; set; }
     public int? Type { get; set; }      // 0=Income, 1=Expense, null=all
     public Guid? CategoryId { get; set; }
+    public DateOnly? FromDate { get; set; }
+    public DateOnly? ToDate { get; set; }
+    public Guid? OwnerUserId { get; set; }
+    public string? Note { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }

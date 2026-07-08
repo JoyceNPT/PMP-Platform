@@ -59,6 +59,8 @@
   html {
     font-family: 'Be Vietnam Pro', sans-serif;
     -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     scroll-behavior: smooth;
   }
 
@@ -68,10 +70,48 @@
       radial-gradient(at 0% 0%, hsla(250, 84%, 60%, 0.05) 0px, transparent 50%),
       radial-gradient(at 100% 100%, hsla(280, 80%, 65%, 0.03) 0px, transparent 50%);
     background-attachment: fixed;
+    min-width: 0;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {
     @apply font-bold tracking-tight;
+  }
+}
+
+@layer base {
+  @media (max-width: 768px) {
+    input,
+    select,
+    textarea,
+    [contenteditable="true"],
+    [role="textbox"] {
+      font-size: 16px !important;
+    }
+
+    input,
+    select,
+    textarea,
+    [contenteditable="true"],
+    [role="textbox"] {
+      line-height: 1.5;
+      transform-origin: center;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus,
+    [contenteditable="true"]:focus,
+    [role="textbox"]:focus {
+      scroll-margin: 96px;
+    }
+
+    html,
+    body,
+    #root {
+      width: 100%;
+      max-width: 100%;
+    }
   }
 }
 
